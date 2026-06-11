@@ -12,6 +12,7 @@ function newGame(){
       tr._gain.gain.cancelScheduledValues(audio.ctx.currentTime);
       tr._gain.gain.setValueAtTime(0, audio.ctx.currentTime);
     }
+    if (tr._skipped) tr._skipped.length = 0;
     for (const gem of tr._gems){
       gem.hit = false; gem.missed = false;
       if (gem.mesh) releaseGemMesh(tr, gem);
@@ -94,11 +95,14 @@ function captureTrack(tr, p){
   G.energy = Math.min(100, G.energy + 12);
   G.attempt.active = false;
   showMsg(tr.name + ' CAPTURED', 'good');
-  // unmute now, schedule the remute at the window's end
+  // unmute now, schedule the remute at the window's end. The bus is silent
+  // at this instant (uncaptured events are never scheduled into it), so an
+  // instant unmute can't click — and a ramp would shave the attack of
+  // events flushed at the seam.
   const g = tr._gain.gain, n = audio.ctx.currentTime;
   g.cancelScheduledValues(n);
-  g.setValueAtTime(g.value, n);
-  g.linearRampToValueAtTime(1, n + 0.05);
+  g.setValueAtTime(1, n);
+  flushSkippedEvents(tr);
   const endT = phraseStartTime(tr.capturedUntilPhrase + 1);
   if (endT > n + 0.1){
     g.setValueAtTime(1, endT - 0.06);
@@ -147,7 +151,7 @@ function onLaneInput(lane){
     G.score += (perfect ? 200 : 100) * G.mult;
     G.hits++;
     G.energy = Math.min(100, G.energy + 0.5);
-    playVoice(best.inst, audio.ctx.currentTime + 0.005, best.note, best.lenSec, audio.hitBus);
+    playHitNote(tr, best);
     pressFeedback(lane, perfect ? 'perfect' : 'good', off);
     releaseGemMesh(tr, best);
     if (best.phrase === p){

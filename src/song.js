@@ -126,6 +126,11 @@ function prepareSong(){
       tr._byPhrase[gem.phrase].push(gem);
     }
     tr._gems.sort((a,b)=>a.time-b.time);
+    // gems sharing a step play only their own event on hit, not the full
+    // pattern slice (slice playback would double-fire on simultaneous hits)
+    const perStep = {};
+    for (const g of tr._gems) perStep[g.step] = (perStep[g.step] || 0) + 1;
+    for (const g of tr._gems) g._solo = perStep[g.step] > 1;
     tr.capturedUntilPhrase = null;
   }
 }

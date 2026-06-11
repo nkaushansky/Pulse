@@ -84,3 +84,18 @@ V2 (§2 of the spec) extends `meta`: `difficulty` becomes the displayed
 enum `easy | normal | hard`, and per-song overrides (starting with
 `speed`) live in an optional `meta.overrides` object. Update this section
 when that lands.
+
+## Audio routing (V2 §1 — per-hit note audio)
+
+A gem hit on an uncaptured track performs the track's **actual pattern
+content at that grid step** — the full slice (chords, layered drums) —
+via `playHitNote()` into `audio.noteBus` (gain 1.0, i.e. exactly the
+captured-stem level; `hitBus` at 0.9 now carries only break feedback).
+Backing pattern events are scheduled **only when their phrase is inside
+a captured window** (`scheduleStep`): never schedule events into a muted
+`tr._gain` "just in case" — a muted-scheduled voice becomes an audible
+attack/tail bleed (double trigger) when a capture lands inside the
+scheduler lookahead. Uncaptured events near now are recorded in
+`tr._skipped`; `flushSkippedEvents()` replays the still-future ones at
+capture time, excluding steps the player's own hits just performed.
+Misses and empty-lane presses stay non-musical.

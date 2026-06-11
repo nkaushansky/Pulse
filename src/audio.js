@@ -1,5 +1,5 @@
 /* ---------------- audio engine ---------------- */
-const audio = { ctx:null, master:null, hitBus:null, pulseBus:null, noiseBuf:null };
+const audio = { ctx:null, master:null, hitBus:null, noteBus:null, pulseBus:null, noiseBuf:null };
 
 function initAudio(){
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -10,6 +10,9 @@ function initAudio(){
   const master = ctx.createGain(); master.gain.value = 0.85;
   master.connect(comp);
   const hitBus = ctx.createGain(); hitBus.gain.value = 0.9; hitBus.connect(master);
+  // Player-performed pattern notes: must sit at exactly the captured-stem
+  // level (track gains are 1 when captured) so capture is a seamless handoff.
+  const noteBus = ctx.createGain(); noteBus.gain.value = 1.0; noteBus.connect(master);
   // Constant quiet pulse so the grid is audible before any capture.
   const pulseBus = ctx.createGain(); pulseBus.gain.value = 0.06; pulseBus.connect(master);
   const len = Math.floor(ctx.sampleRate * 2);
@@ -17,11 +20,12 @@ function initAudio(){
   const d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   audio.ctx = ctx; audio.master = master; audio.hitBus = hitBus;
-  audio.pulseBus = pulseBus; audio.noiseBuf = buf;
+  audio.noteBus = noteBus; audio.pulseBus = pulseBus; audio.noiseBuf = buf;
   for (const tr of SONG.tracks){
     tr._gain = ctx.createGain();
     tr._gain.gain.value = 0;       // muted until captured
     tr._gain.connect(master);
+    tr._skipped = [];              // unscheduled backing events near "now" (see scheduleStep)
   }
 }
 
@@ -112,14 +116,61 @@ function schedulerTick(){
 function scheduleStep(s){
   const t = stepTime(s);
   if (s % 4 === 0) playVoice('pulseTick', t, 93, 0.05, audio.pulseBus);
+  const phrase = Math.floor(s / STEPS_PER_PHRASE);
   for (const tr of SONG.tracks){
     if (tr.stemUrl) continue;           // stem tracks scheduled via playStemWindow
     const evs = tr._stepMap[s % STEPS_PER_PHRASE];
-    if (evs){
+    if (!evs) continue;
+    if (isCaptured(tr, phrase)){
       for (const ev of evs){
         playVoice(ev.inst || tr.synth, t, ev.note, (ev.len || 1) * S16, tr._gain);
       }
+    } else {
+      // Uncaptured: do NOT schedule into the muted bus. A voice scheduled
+      // muted would become audible mid-note if a capture lands inside the
+      // lookahead window (attack/tail bleed = the double-trigger artifact).
+      // Record it instead; captureTrack flushes still-future entries that
+      // the player's own hits don't already cover.
+      while (tr._skipped.length && tr._skipped[0].time < t - 0.4) tr._skipped.shift();
+      for (const ev of evs){
+        tr._skipped.push({ time:t, step:s,
+          inst: ev.inst || tr.synth, note: ev.note, dur:(ev.len || 1) * S16 });
+      }
     }
   }
+}
+
+/* §1 per-hit note audio: a gem hit performs the track's actual pattern
+   content at that grid position — the full slice (chords, layered drums),
+   so a clean phrase IS the stem played live. Multi-gem steps (none in
+   this song, but legal in the format) fall back to the gem's own event
+   so simultaneous hits can't double-fire the slice.                     */
+function playHitNote(tr, gem){
+  const when = audio.ctx.currentTime + 0.005;
+  const evs = tr._stepMap[gem.step % STEPS_PER_PHRASE];
+  if (!evs || gem._solo){
+    playVoice(gem.inst, when, gem.note, gem.lenSec, audio.noteBus);
+    return;
+  }
+  for (const ev of evs){
+    playVoice(ev.inst || tr.synth, when, ev.note, (ev.len || 1) * S16, audio.noteBus);
+  }
+}
+
+/* Capture seam: steps inside the scheduler lookahead were already passed
+   over as muted when the capture lands. Replay the still-future ones into
+   the (now-audible) track bus — except steps the player just performed,
+   which already sounded via playHitNote.                                */
+function flushSkippedEvents(tr){
+  const n = audio.ctx.currentTime;
+  for (const ev of tr._skipped){
+    if (ev.time <= n + 0.003) continue;
+    const phrase = Math.floor(ev.step / STEPS_PER_PHRASE);
+    if (!isCaptured(tr, phrase)) continue;
+    const gems = tr._byPhrase[phrase];
+    if (gems && gems.some(g => g.step === ev.step && g.hit)) continue;
+    playVoice(ev.inst, ev.time, ev.note, ev.dur, tr._gain);
+  }
+  tr._skipped.length = 0;
 }
 
