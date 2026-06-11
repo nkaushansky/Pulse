@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PULSE</title>
+<style>
+  :root{
+    --lane0:#33eeff; --lane1:#ff44dd; --lane2:#ffcc33;
+    --bad:#ff3355; --good:#21d4a7; --ink:#cfe3ff; --dim:#5a6a8a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
+    color:var(--ink);-webkit-user-select:none;user-select:none}
+  #scene{position:fixed;inset:0}
+  #scene canvas{display:block}
+
+  .hidden{display:none !important}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #topbar{position:absolute;top:0;left:0;right:0;display:flex;
+    justify-content:space-between;align-items:flex-start;padding:14px 18px}
+  #scorebox{text-align:left}
+  #score{font-size:clamp(20px,3.2vw,34px);font-weight:700;letter-spacing:.08em;
+    color:#fff;text-shadow:0 0 12px rgba(120,200,255,.8)}
+  #mult{font-size:clamp(12px,1.6vw,17px);letter-spacing:.3em;color:var(--lane2);
+    text-shadow:0 0 10px rgba(255,204,51,.7);margin-top:2px}
+  #mult.maxed{color:#fff;animation:multpulse .5s infinite alternate}
+  @keyframes multpulse{from{text-shadow:0 0 8px #ffcc33}to{text-shadow:0 0 22px #ffcc33,0 0 40px #ff44dd}}
+
+  #progresswrap{position:absolute;left:50%;top:14px;transform:translateX(-50%);
+    width:min(38vw,420px);height:4px;background:rgba(120,160,255,.12);
+    border:1px solid rgba(120,160,255,.25)}
+  #progress{height:100%;width:0%;background:linear-gradient(90deg,var(--lane0),var(--lane1));
+    box-shadow:0 0 8px rgba(120,200,255,.7)}
+  #barcount{position:absolute;left:50%;top:24px;transform:translateX(-50%);
+    font-size:10px;letter-spacing:.25em;color:var(--dim)}
+
+  #ringwrap{width:72px;height:72px}
+  #ring{width:100%;height:100%;overflow:visible;transition:none}
+
+  #trackname{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);
+    font-size:clamp(13px,1.8vw,18px);letter-spacing:.35em;text-align:center;
+    color:#fff;text-shadow:0 0 14px currentColor;white-space:nowrap}
+  #trackstate{display:block;font-size:10px;letter-spacing:.3em;margin-top:4px;color:var(--dim)}
+
+  #energywrap{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);
+    width:min(44vw,360px);height:10px;background:rgba(120,160,255,.08);
+    border:1px solid rgba(120,160,255,.3);transform-origin:center}
+  #energy{height:100%;width:60%;background:var(--good);
+    box-shadow:0 0 10px var(--good);transition:width .15s linear,background .2s}
+  #energy.low{background:var(--bad);box-shadow:0 0 12px var(--bad);
+    animation:energyblink .35s infinite alternate}
+  @keyframes energyblink{from{opacity:1}to{opacity:.45}}
+
+  #keyhints{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    display:flex;gap:14px;font-size:10px;letter-spacing:.18em;color:var(--dim)}
+  #keyhints b{color:var(--ink)}
+
+  #msg{position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);
+    font-size:clamp(20px,3.6vw,40px);font-weight:700;letter-spacing:.4em;
+    text-align:center;opacity:0;white-space:nowrap}
+  #msg.show{animation:msgpop 1.1s ease-out forwards}
+  #msg.good{color:var(--good);text-shadow:0 0 18px var(--good),0 0 50px var(--good)}
+  #msg.bad{color:var(--bad);text-shadow:0 0 18px var(--bad)}
+  #msg.neutral{color:#fff;text-shadow:0 0 18px rgba(160,220,255,.9)}
+  #judge{position:absolute;bottom:26%;left:50%;transform:translateX(-50%);
+    font-size:clamp(13px,1.6vw,19px);font-weight:700;letter-spacing:.3em;
+    text-align:center;opacity:0;white-space:nowrap}
+  #judge.show{animation:judgepop .7s ease-out forwards}
+  @keyframes judgepop{0%{opacity:1;transform:translateX(-50%) scale(1.18)}
+    55%{opacity:1;transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) scale(1)}}
+  @keyframes msgpop{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+    12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}
+    22%{transform:translate(-50%,-50%) scale(1)}
+    75%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.02)}
+  }
+
+  #count{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);
+    font-size:clamp(60px,12vw,140px);font-weight:700;color:#fff;
+    text-shadow:0 0 30px var(--lane0),0 0 80px var(--lane1);opacity:0}
+  #count.tick{animation:countpop .5s ease-out}
+  @keyframes countpop{0%{opacity:0;transform:translate(-50%,-50%) scale(1.4)}
+    20%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    80%{opacity:1}100%{opacity:0}}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:radial-gradient(ellipse at center,rgba(4,6,20,.82),rgba(0,0,4,.95));
+    backdrop-filter:blur(3px);padding:24px}
+  .gametitle{font-size:clamp(54px,11vw,120px);font-weight:700;letter-spacing:.32em;
+    margin-left:.32em;color:#fff;
+    text-shadow:0 0 18px var(--lane0),0 0 60px var(--lane1),0 0 120px var(--lane1)}
+  .subtitle{font-size:clamp(10px,1.4vw,14px);letter-spacing:.5em;margin:10px 0 4px .5em;
+    color:var(--dim)}
+  .songmeta{font-size:clamp(11px,1.5vw,15px);letter-spacing:.25em;color:var(--lane0);
+    margin:22px 0 6px;text-shadow:0 0 10px rgba(51,238,255,.6)}
+
+  .howto{margin-top:26px;display:grid;grid-template-columns:auto auto;
+    gap:10px 22px;font-size:clamp(11px,1.4vw,14px);letter-spacing:.12em;
+    text-align:left;align-items:center}
+  .howto .keys{text-align:right}
+  kbd{display:inline-block;min-width:26px;padding:4px 8px;margin:0 2px;
+    border:1px solid rgba(140,180,255,.45);border-bottom-width:3px;border-radius:4px;
+    background:rgba(20,30,60,.6);color:#fff;font-family:inherit;font-size:.92em;
+    text-align:center;box-shadow:0 0 8px rgba(80,140,255,.25)}
+
+  .startprompt{margin-top:34px;font-size:clamp(12px,1.6vw,16px);letter-spacing:.35em;
+    color:#fff;animation:blink 1.2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .footnote{margin-top:18px;font-size:10px;letter-spacing:.25em;color:var(--dim)}
+
+  #results .grade{font-size:clamp(80px,16vw,170px);font-weight:700;line-height:1;
+    color:#fff;text-shadow:0 0 24px var(--lane0),0 0 90px var(--lane1)}
+  #results .verdict{font-size:clamp(16px,2.6vw,26px);letter-spacing:.5em;margin:8px 0 26px .5em}
+  #results.fail .grade,#results.fail .verdict{color:var(--bad);
+    text-shadow:0 0 24px var(--bad)}
+  .stats{display:grid;grid-template-columns:auto auto;gap:8px 30px;
+    font-size:clamp(12px,1.6vw,16px);letter-spacing:.15em;text-align:left}
+  .stats .v{text-align:right;color:#fff}
+  #pause .gametitle{font-size:clamp(30px,6vw,60px)}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div id="scorebox">
+      <div id="score">0</div>
+      <div id="mult">&times;1</div>
+    </div>
+    <div id="ringwrap"><svg id="ring" viewBox="0 0 64 64"></svg></div>
+  </div>
+  <div id="progresswrap"><div id="progress"></div></div>
+  <div id="barcount">BAR 1 / 96</div>
+  <div id="trackname">DRUMS<span id="trackstate">OPEN</span></div>
+  <div id="energywrap"><div id="energy"></div></div>
+  <div id="keyhints"></div>
+  <div id="msg"></div>
+  <div id="judge"></div>
+  <div id="count"></div>
+</div>
+
+<div id="title" class="overlay">
+  <div class="gametitle">PULSE</div>
+  <div class="subtitle">CAPTURE THE SIGNAL</div>
+  <div class="songmeta" id="titlemeta"></div>
+  <div class="howto" id="howto"></div>
+  <div class="startprompt">CLICK OR PRESS ANY KEY</div>
+  <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="gametitle">PAUSED</div>
+  <div class="startprompt">PRESS ESC TO RESUME</div>
+</div>
+
+<div id="results" class="overlay hidden">
+  <div class="grade" id="grade">A</div>
+  <div class="verdict" id="verdict">SIGNAL CLEAR</div>
+  <div class="stats">
+    <span>SCORE</span><span class="v" id="r-score">0</span>
+    <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
+    <span>ACCURACY</span><span class="v" id="r-acc">0%</span>
+    <span>CAPTURES</span><span class="v" id="r-caps">0</span>
+    <span>TRACKS CAPTURED</span><span class="v" id="r-tracks">0 / 5</span>
+    <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
+  </div>
+  <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   PULSE v1 — Frequency-style rhythm tunnel
+   All timing derives from audioContext.currentTime. rAF is
+   visuals-only. Lookahead scheduler per "A Tale of Two Clocks".
+   ============================================================ */
+
+/* ---------------- timing constants ---------------- */
+const BPM = 120;
+const SPB = 60 / BPM;            // seconds per beat (0.5)
+const SPBAR = SPB * 4;           // seconds per bar (2.0)
+const S16 = SPB / 4;             // seconds per 16th (0.125)
+const STEPS_PER_BAR = 16;
+const STEPS_PER_PHRASE = 32;     // phrase = 2 bars
+const PHRASE_SEC = SPBAR * 2;    // 4.0s
+const PHRASE_BARS = 2;
+const CAPTURE_PHRASES = 4;       // 8 bars
+const HIT_WINDOW = 0.090;
+const PERFECT_WINDOW = 0.040;
+
+const CONFIG = {
+  speed: 18,            // world units per second of song time
+  spawnAhead: 7.0,      // seconds of gems visible down the tunnel
+  hitZ: -11,            // now-line distance in front of camera (must stay inside bottom of FOV)
+  tunnelRadius: 6,
+  rotateTween: 0.15,    // seconds
+  countInBeats: 3,
+  // Input abstraction: game logic only ever sees semantic actions.
+  keymap: {
+    KeyJ:'lane0', KeyK:'lane1', KeyL:'lane2',
+    ArrowLeft:'lane0', ArrowDown:'lane1', ArrowRight:'lane2',
+    KeyQ:'rotateLeft', KeyE:'rotateRight',
+    KeyA:'rotateLeft', KeyD:'rotateRight',
+    Escape:'pause'
+  },
+  // HUD labels come from config, never from keycode assumptions.
+  inputLabels: {
+    lane0:'J', lane1:'K', lane2:'L',
+    lanesAlt:'\u2190 \u2193 \u2192',
+    rotateLeft:'Q / A', rotateRight:'E / D', pause:'ESC'
+  }
+};
+
+const LANE_COLORS = [0x33eeff, 0xff44dd, 0xffcc33];
+
+/* ---------------- instrument registry ----------------
+   Each entry is a descriptor interpreted by ONE generic
+   voice function (playVoice). Tracks reference these by id;
+   pattern events may override per-event via ev.inst.       */
+const INSTRUMENTS = {
+  kick909:    { type:'osc', wave:'sine', pitchEnv:{start:160,end:44,time:0.09},
+                attack:0.002, decay:0.26, sustain:0, gain:1.05 },
+  snareNoise: { type:'noise', filter:{type:'bandpass',freq:1900,q:0.9},
+                attack:0.001, decay:0.16, sustain:0, gain:0.8 },
+  clap:       { type:'noise', filter:{type:'bandpass',freq:1300,q:1.2},
+                attack:0.001, decay:0.12, sustain:0, gain:0.75 },
+  hatClosed:  { type:'noise', filter:{type:'highpass',freq:8200,q:0.7},
+                attack:0.001, decay:0.045, sustain:0, gain:0.4 },
+  hatOpen:    { type:'noise', filter:{type:'highpass',freq:7800,q:0.7},
+                attack:0.001, decay:0.28, sustain:0, gain:0.34 },
+  bass808:    { type:'osc', wave:'sine', filter:{type:'lowpass',freq:520,q:0.8},
+                attack:0.004, decay:0.18, sustain:0.55, release:0.07, gain:0.95 },
+  bassSaw:    { type:'osc', wave:'sawtooth',
+                filter:{type:'lowpass',freq:420,q:4,envMult:5,envTime:0.12},
+                attack:0.003, decay:0.12, sustain:0.4, release:0.06, gain:0.6 },
+  leadSquare: { type:'osc', wave:'square', voices:2, detune:10,
+                filter:{type:'lowpass',freq:1600,q:2,envMult:2.4,envTime:0.1},
+                attack:0.004, decay:0.15, sustain:0.45, release:0.1, gain:0.32 },
+  padTriangle:{ type:'osc', wave:'triangle', voices:2, detune:7,
+                filter:{type:'lowpass',freq:1100,q:0.5},
+                attack:0.3, decay:0.4, sustain:0.7, release:0.5, gain:0.16 },
+  arpPluck:   { type:'osc', wave:'sawtooth',
+                filter:{type:'lowpass',freq:700,q:3,envMult:6,envTime:0.07},
+                attack:0.001, decay:0.12, sustain:0, gain:0.4 },
+  fxSweep:    { type:'noise', filter:{type:'bandpass',freq:300,q:2,envMult:14,envTime:0.5},
+                attack:0.05, decay:0.6, sustain:0, gain:0.25 },
+  breakBuzz:  { type:'osc', wave:'sawtooth', pitchEnv:{start:120,end:55,time:0.18},
+                filter:{type:'lowpass',freq:500,q:1},
+                attack:0.002, decay:0.22, sustain:0, gain:0.5 },
+  tickHi:     { type:'osc', wave:'square', filter:{type:'lowpass',freq:6000,q:0.7},
+                attack:0.001, decay:0.07, sustain:0, gain:0.5 },
+  pulseTick:  { type:'noise', filter:{type:'highpass',freq:9500,q:0.7},
+                attack:0.0005, decay:0.018, sustain:0, gain:0.9 }
+};
+
+/* ---------------- song package ----------------
+   Format (per spec):
+     meta: { title, bpm, timeSignature, lengthBars, difficulty }
+     tracks: [{ name, color, synth:"instrumentId" | stemUrl:"...",
+                pattern:[{step,note,len,inst?}],   // 16th grid, 2-bar loop
+                chart:[{bar,beat,lane}] }]
+   A track is EITHER synth-pattern-driven OR stem-driven.
+   chart here is authored as a 2-bar loop (_chartLoop) and
+   expanded to the canonical [{bar,beat,lane}] form at load. */
+const SONG = {
+  meta: { title:'NEON CIRCUIT', bpm:120, timeSignature:[4,4],
+          lengthBars:96, difficulty:'NORMAL' },
+  tracks: [
+    { name:'DRUMS', color:0xff3b5c, wall:0, synth:'kick909',
+      pattern:[
+        {step:0, note:36, len:1},{step:4, note:36, len:1},
+        {step:8, note:36, len:1},{step:12, note:36, len:1},
+        {step:16,note:36, len:1},{step:20,note:36, len:1},
+        {step:24,note:36, len:1},{step:28,note:36, len:1},
+        {step:4, note:38, len:1, inst:'snareNoise'},
+        {step:12,note:38, len:1, inst:'snareNoise'},
+        {step:20,note:38, len:1, inst:'snareNoise'},
+        {step:28,note:38, len:1, inst:'snareNoise'},
+        {step:2, note:42, len:1, inst:'hatClosed'},
+        {step:6, note:42, len:1, inst:'hatClosed'},
+        {step:10,note:42, len:1, inst:'hatClosed'},
+        {step:18,note:42, len:1, inst:'hatClosed'},
+        {step:22,note:42, len:1, inst:'hatClosed'},
+        {step:26,note:42, len:1, inst:'hatClosed'},
+        {step:14,note:46, len:2, inst:'hatOpen'},
+        {step:30,note:46, len:2, inst:'hatOpen'}
+      ],
+      _chartLoop:[
+        {step:0,lane:1},{step:4,lane:2},{step:8,lane:1},{step:12,lane:2},
+        {step:14,lane:0},{step:16,lane:1},{step:20,lane:2},{step:24,lane:1},
+        {step:28,lane:2},{step:30,lane:0}
+      ]},
+    { name:'BASS', color:0x2f7bff, wall:1, synth:'bass808',
+      pattern:[
+        {step:0, note:33, len:3},{step:6, note:33, len:2},
+        {step:8, note:33, len:3},{step:12,note:33, len:2},
+        {step:14,note:36, len:2},
+        {step:16,note:29, len:3},{step:22,note:29, len:2},
+        {step:24,note:29, len:3},{step:28,note:29, len:2},
+        {step:30,note:31, len:2}
+      ],
+      _chartLoop:[
+        {step:0,lane:0},{step:6,lane:1},{step:8,lane:0},{step:12,lane:1},
+        {step:14,lane:2},{step:16,lane:0},{step:22,lane:1},{step:24,lane:0},
+        {step:28,lane:1},{step:30,lane:2}
+      ]},
+    { name:'SYNTH LEAD', color:0xb04dff, wall:2, synth:'leadSquare',
+      pattern:[
+        {step:2, note:64, len:2},{step:4, note:67, len:3},
+        {step:8, note:69, len:4},{step:14,note:67, len:2},
+        {step:18,note:64, len:2},{step:20,note:62, len:2},
+        {step:24,note:60, len:4},{step:30,note:62, len:2}
+      ],
+      _chartLoop:[
+        {step:2,lane:1},{step:4,lane:1},{step:8,lane:2},{step:14,lane:1},
+        {step:18,lane:1},{step:20,lane:0},{step:24,lane:0},{step:30,lane:0}
+      ]},
+    { name:'SYNTH PAD', color:0x21d4a7, wall:3, synth:'padTriangle',
+      pattern:[
+        {step:0, note:45, len:16},{step:0, note:48, len:16},{step:0, note:52, len:16},
+        {step:16,note:41, len:16},{step:16,note:45, len:16},{step:16,note:48, len:16},
+        {step:24,note:52, len:4}
+      ],
+      _chartLoop:[ {step:0,lane:1},{step:16,lane:2},{step:24,lane:0} ]},
+    { name:'ARP / FX', color:0xffb22e, wall:4, synth:'arpPluck',
+      pattern:[
+        {step:0, note:69,len:1},{step:2, note:72,len:1},{step:4, note:76,len:1},{step:6, note:81,len:1},
+        {step:8, note:69,len:1},{step:10,note:72,len:1},{step:12,note:76,len:1},{step:14,note:81,len:1},
+        {step:16,note:69,len:1},{step:18,note:72,len:1},{step:20,note:76,len:1},{step:22,note:81,len:1},
+        {step:24,note:69,len:1},{step:26,note:72,len:1},{step:28,note:76,len:1},{step:30,note:81,len:1}
+      ],
+      _chartLoop:[
+        {step:0,lane:0},{step:2,lane:1},{step:4,lane:2},
+        {step:8,lane:0},{step:10,lane:1},{step:12,lane:2},
+        {step:16,lane:0},{step:18,lane:1},{step:20,lane:2},
+        {step:24,lane:0},{step:26,lane:1},{step:28,lane:2}
+      ]}
+  ]
+};
+const TOTAL_PHRASES = SONG.meta.lengthBars / PHRASE_BARS;
+const TOTAL_STEPS = SONG.meta.lengthBars * STEPS_PER_BAR;
+const WALL_COUNT = 8;
+
+function midiFreq(n){ return 440 * Math.pow(2, (n - 69) / 12); }
+
+/* Expand authoring loops into the canonical song format +
+   runtime gem objects. Game code consumes tracks generically:
+   a track with stemUrl skips pattern scheduling (v1 stub). */
+function prepareSong(){
+  for (const tr of SONG.tracks){
+    tr._stepMap = {};
+    if (tr.pattern){
+      for (const ev of tr.pattern){
+        (tr._stepMap[ev.step] = tr._stepMap[ev.step] || []).push(ev);
+      }
+    }
+    tr.chart = [];
+    for (let p = 0; p < TOTAL_PHRASES; p++){
+      for (const c of tr._chartLoop){
+        tr.chart.push({ bar: p * 2 + (c.step >> 4), beat: (c.step & 15) / 4, lane: c.lane });
+      }
+    }
+    // runtime gems
+    tr._gems = [];
+    tr._byPhrase = [];
+    for (let p = 0; p < TOTAL_PHRASES; p++) tr._byPhrase.push([]);
+    for (const c of tr.chart){
+      const step = c.bar * STEPS_PER_BAR + Math.round(c.beat * 4);
+      const loopStep = step % STEPS_PER_PHRASE;
+      const evs = tr._stepMap[loopStep];
+      const ev = evs ? evs[Math.min(c.lane, evs.length - 1)] : null;
+      const gem = {
+        time: step * S16, step, lane: c.lane,
+        phrase: Math.floor(c.bar / PHRASE_BARS),
+        note: ev ? ev.note : 69,
+        inst: ev ? (ev.inst || tr.synth) : tr.synth,
+        lenSec: (ev ? (ev.len || 1) : 1) * S16,
+        hit:false, missed:false, mesh:null
+      };
+      tr._gems.push(gem);
+      tr._byPhrase[gem.phrase].push(gem);
+    }
+    tr._gems.sort((a,b)=>a.time-b.time);
+    tr.capturedUntilPhrase = null;
+  }
+}
+
+/* ---------------- audio engine ---------------- */
+const audio = { ctx:null, master:null, hitBus:null, pulseBus:null, noiseBuf:null };
+
+function initAudio(){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 20;
+  comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.18;
+  comp.connect(ctx.destination);
+  const master = ctx.createGain(); master.gain.value = 0.85;
+  master.connect(comp);
+  const hitBus = ctx.createGain(); hitBus.gain.value = 0.9; hitBus.connect(master);
+  // Constant quiet pulse so the grid is audible before any capture.
+  const pulseBus = ctx.createGain(); pulseBus.gain.value = 0.06; pulseBus.connect(master);
+  const len = Math.floor(ctx.sampleRate * 2);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  audio.ctx = ctx; audio.master = master; audio.hitBus = hitBus;
+  audio.pulseBus = pulseBus; audio.noiseBuf = buf;
+  for (const tr of SONG.tracks){
+    tr._gain = ctx.createGain();
+    tr._gain.gain.value = 0;       // muted until captured
+    tr._gain.connect(master);
+  }
+}
+
+/* ONE generic synth voice — interprets any INSTRUMENTS descriptor. */
+function playVoice(instId, when, midi, dur, dest){
+  const d = INSTRUMENTS[instId];
+  if (!d || !audio.ctx) return;
+  const ctx = audio.ctx;
+  const amp = ctx.createGain();
+  amp.gain.value = 0;
+  let chainIn = amp;
+  if (d.filter){
+    const f = ctx.createBiquadFilter();
+    f.type = d.filter.type;
+    f.Q.value = d.filter.q || 0.7;
+    if (d.filter.envMult){
+      f.frequency.setValueAtTime(d.filter.freq * d.filter.envMult, when);
+      f.frequency.exponentialRampToValueAtTime(d.filter.freq, when + (d.filter.envTime || 0.15));
+    } else {
+      f.frequency.setValueAtTime(d.filter.freq, when);
+    }
+    f.connect(amp);
+    chainIn = f;
+  }
+  amp.connect(dest);
+  const sources = [];
+  if (d.type === 'noise'){
+    const src = ctx.createBufferSource();
+    src.buffer = audio.noiseBuf; src.loop = true;
+    src.connect(chainIn); sources.push(src);
+  } else {
+    const voices = d.voices || 1;
+    for (let v = 0; v < voices; v++){
+      const o = ctx.createOscillator();
+      o.type = d.wave || 'sine';
+      if (d.pitchEnv){
+        o.frequency.setValueAtTime(d.pitchEnv.start, when);
+        o.frequency.exponentialRampToValueAtTime(d.pitchEnv.end, when + d.pitchEnv.time);
+      } else {
+        o.frequency.setValueAtTime(midiFreq(midi), when);
+      }
+      if (d.detune && voices > 1) o.detune.value = (v - (voices - 1) / 2) * d.detune;
+      o.connect(chainIn); sources.push(o);
+    }
+  }
+  const peak = d.gain || 0.8;
+  const atk = d.attack || 0.002, dec = d.decay || 0.1;
+  const sus = Math.max((d.sustain || 0) * peak, 0.0001);
+  const g = amp.gain;
+  g.setValueAtTime(0.0001, when);
+  g.linearRampToValueAtTime(peak, when + atk);
+  g.exponentialRampToValueAtTime(sus, when + atk + dec);
+  let tail = when + atk + dec;
+  if ((d.sustain || 0) > 0){
+    const rs = Math.max(when + dur, when + atk + dec);
+    g.setValueAtTime(sus, rs);
+    g.exponentialRampToValueAtTime(0.0001, rs + (d.release || 0.08));
+    tail = rs + (d.release || 0.08);
+  }
+  const stopAt = tail + 0.1;
+  for (const s of sources){ s.start(when); s.stop(stopAt); }
+}
+
+/* Stem-driven track stub (format + code path exist; v1 has no decoder UI).
+   With a decoded buffer this schedules an 8-bar window of the stem:   */
+function playStemWindow(track, startTime, offsetSec, durSec){
+  if (!track._stemBuffer){
+    console.warn('PULSE v1: stemUrl track "' + track.name + '" has no decoded buffer; skipping.');
+    return;
+  }
+  const src = audio.ctx.createBufferSource();
+  src.buffer = track._stemBuffer;
+  src.connect(track._gain);
+  src.start(startTime, offsetSec, durSec);
+}
+
+/* Lookahead scheduler — 25ms interval, ~120ms lookahead. */
+let schedTimer = null, nextStep = 0;
+function stepTime(s){ return G.songStart + s * S16; }
+function schedulerTick(){
+  if (!G || (G.state !== 'playing' && G.state !== 'countin')) return;
+  const ahead = audio.ctx.currentTime + 0.12;
+  while (nextStep < TOTAL_STEPS && stepTime(nextStep) < ahead){
+    scheduleStep(nextStep);
+    nextStep++;
+  }
+}
+function scheduleStep(s){
+  const t = stepTime(s);
+  if (s % 4 === 0) playVoice('pulseTick', t, 93, 0.05, audio.pulseBus);
+  for (const tr of SONG.tracks){
+    if (tr.stemUrl) continue;           // stem tracks scheduled via playStemWindow
+    const evs = tr._stepMap[s % STEPS_PER_PHRASE];
+    if (evs){
+      for (const ev of evs){
+        playVoice(ev.inst || tr.synth, t, ev.note, (ev.len || 1) * S16, tr._gain);
+      }
+    }
+  }
+}
+
+/* ---------------- three.js scene ---------------- */
+const R = CONFIG.tunnelRadius;
+const SPEED = CONFIG.speed;
+const HIT_Z = CONFIG.hitZ;
+const LANE_X = [-1.6, 0, 1.6];
+const WALL_W = 4.8;
+
+let renderer, scene, camera, tunnelGroup;
+const wallRender = [];   // per-wall render data, indexed by wall id
+const gemGeo = new THREE.OctahedronGeometry(0.34);
+const gemMats = { bright:[], dim:[], miss:null };
+
+function initScene(){
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById('scene').appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000004);
+  scene.fog = new THREE.Fog(0x000004, 28, 140);
+
+  camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 300);
+  camera.position.set(0, 0, 0);
+  camera.lookAt(0, -2.2, -30);
+
+  tunnelGroup = new THREE.Group();
+  scene.add(tunnelGroup);
+
+  // gem materials: 3 lane colors x bright/dim, plus miss-grey
+  for (let l = 0; l < 3; l++){
+    gemMats.bright.push(new THREE.MeshBasicMaterial({
+      color: LANE_COLORS[l], transparent:true, opacity:0.95,
+      blending: THREE.AdditiveBlending, depthWrite:false }));
+    gemMats.dim.push(new THREE.MeshBasicMaterial({
+      color: LANE_COLORS[l], transparent:true, opacity:0.22,
+      blending: THREE.AdditiveBlending, depthWrite:false }));
+  }
+  gemMats.miss = new THREE.MeshBasicMaterial({
+    color: 0x39394a, transparent:true, opacity:0.35, depthWrite:false });
+
+  buildWalls();
+  buildRings();
+  window.addEventListener('resize', onResize);
+}
+
+function onResize(){
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function wallAngle(w){ return w * Math.PI / 4; }
+
+function buildWalls(){
+  const trackByWall = {};
+  for (const tr of SONG.tracks) trackByWall[tr.wall] = tr;
+
+  for (let w = 0; w < WALL_COUNT; w++){
+    const grp = new THREE.Group();
+    grp.rotation.z = wallAngle(w);
+    tunnelGroup.add(grp);
+    const tr = trackByWall[w] || null;
+    const wr = { group:grp, track:tr, plane:null, hitLine:null, flashes:[], laneLines:[],
+                 zoneBand:null, perfectBand:null, receptors:[] };
+    wallRender[w] = wr;
+    if (tr) tr._wr = wr;
+
+    if (!tr){
+      // empty wall: faint edge hints only
+      const m = new THREE.LineBasicMaterial({ color:0x141a28, transparent:true, opacity:0.6 });
+      for (const x of [-WALL_W/2, WALL_W/2]){
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, -R, 3), new THREE.Vector3(x, -R, -140)]);
+        grp.add(new THREE.Line(geo, m));
+      }
+      continue;
+    }
+
+    // backing plane (lies in XZ at y=-R, facing inward)
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(WALL_W, 150),
+      new THREE.MeshBasicMaterial({ color: tr.color, transparent:true,
+        opacity:0.05, depthWrite:false, side:THREE.DoubleSide }));
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(0, -R - 0.02, -68);
+    grp.add(plane);
+    wr.plane = plane;
+
+    // lane grid lines
+    const lineMat = new THREE.LineBasicMaterial({ color: tr.color, transparent:true, opacity:0.3 });
+    for (const x of [-2.4, -0.8, 0.8, 2.4]){
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, -R, 3), new THREE.Vector3(x, -R, -140)]);
+      const ln = new THREE.Line(geo, lineMat.clone());
+      grp.add(ln);
+      wr.laneLines.push(ln);
+    }
+
+    // now-line at the hit zone
+    const hl = new THREE.Mesh(
+      new THREE.PlaneGeometry(WALL_W, 0.18),
+      new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true,
+        opacity:0.35, blending:THREE.AdditiveBlending, depthWrite:false,
+        side:THREE.DoubleSide }));
+    hl.rotation.x = -Math.PI / 2;
+    hl.position.set(0, -R + 0.02, HIT_Z);
+    grp.add(hl);
+    wr.hitLine = hl;
+
+    // hit-zone band: physical depth of the ±HIT_WINDOW timing window
+    const zb = new THREE.Mesh(
+      new THREE.PlaneGeometry(WALL_W, HIT_WINDOW * 2 * SPEED),
+      new THREE.MeshBasicMaterial({ color: tr.color, transparent:true,
+        opacity:0.10, blending:THREE.AdditiveBlending, depthWrite:false,
+        side:THREE.DoubleSide }));
+    zb.rotation.x = -Math.PI / 2;
+    zb.position.set(0, -R + 0.012, HIT_Z);
+    grp.add(zb);
+    wr.zoneBand = zb;
+
+    // brighter inner strip: the ±PERFECT_WINDOW
+    const pb = new THREE.Mesh(
+      new THREE.PlaneGeometry(WALL_W, PERFECT_WINDOW * 2 * SPEED),
+      new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true,
+        opacity:0.08, blending:THREE.AdditiveBlending, depthWrite:false,
+        side:THREE.DoubleSide }));
+    pb.rotation.x = -Math.PI / 2;
+    pb.position.set(0, -R + 0.016, HIT_Z);
+    grp.add(pb);
+    wr.perfectBand = pb;
+
+    // lane target circles at gem height: gem is hittable when inside,
+    // perfect when centered
+    for (let l = 0; l < 3; l++){
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.50, 0.68, 40),
+        new THREE.MeshBasicMaterial({ color: LANE_COLORS[l], transparent:true,
+          opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false,
+          side:THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(LANE_X[l], -R + 0.4, HIT_Z);
+      grp.add(ring);
+      const fill = new THREE.Mesh(
+        new THREE.CircleGeometry(0.50, 40),
+        new THREE.MeshBasicMaterial({ color: LANE_COLORS[l], transparent:true,
+          opacity:0.06, blending:THREE.AdditiveBlending, depthWrite:false,
+          side:THREE.DoubleSide }));
+      fill.rotation.x = -Math.PI / 2;
+      fill.position.set(LANE_X[l], -R + 0.37, HIT_Z);
+      grp.add(fill);
+      const dot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.07, 16),
+        new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true,
+          opacity:0.7, blending:THREE.AdditiveBlending, depthWrite:false,
+          side:THREE.DoubleSide }));
+      dot.rotation.x = -Math.PI / 2;
+      dot.position.set(LANE_X[l], -R + 0.38, HIT_Z);
+      grp.add(dot);
+      wr.receptors.push({ ring, fill, dot, pop:0 });
+    }
+
+    // per-lane hit flashes
+    for (let l = 0; l < 3; l++){
+      const fl = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.45, 3.2),
+        new THREE.MeshBasicMaterial({ color: LANE_COLORS[l], transparent:true,
+          opacity:0, blending:THREE.AdditiveBlending, depthWrite:false,
+          side:THREE.DoubleSide }));
+      fl.rotation.x = -Math.PI / 2;
+      fl.position.set(LANE_X[l], -R + 0.03, HIT_Z);
+      grp.add(fl);
+      wr.flashes.push(fl);
+    }
+
+    // gem pool + live set live on the track
+    tr._pool = [];
+    tr._live = new Set();
+    tr._spawnPtr = 0;
+  }
+}
+
+function buildRings(){
+  // octagon depth rings (flat-bottom orientation: vertices at 22.5° + k*45°)
+  const Rv = R / Math.cos(Math.PI / 8);
+  const pts = [];
+  for (let k = 0; k < 8; k++){
+    const a = Math.PI / 8 + k * Math.PI / 4;
+    pts.push(new THREE.Vector3(Rv * Math.cos(a), Rv * Math.sin(a), 0));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  for (let i = 0; i < 14; i++){
+    const ring = new THREE.LineLoop(geo,
+      new THREE.LineBasicMaterial({ color:0x1b2840, transparent:true, opacity:0.8 }));
+    ring.position.z = -4 - i * 10;
+    tunnelGroup.add(ring);
+  }
+}
+
+function getGemMesh(tr){
+  let m = tr._pool.pop();
+  if (!m){
+    m = new THREE.Mesh(gemGeo, gemMats.bright[0]);
+    tr._wr.group.add(m);
+  }
+  m.visible = true;
+  return m;
+}
+function releaseGemMesh(tr, gem){
+  if (!gem.mesh) return;
+  gem.mesh.visible = false;
+  tr._pool.push(gem.mesh);
+  tr._live.delete(gem);
+  gem.mesh = null;
+}
+
+function gemMaterial(tr, gem){
+  if (gem.missed) return gemMats.miss;
+  const active = SONG.tracks[G.activeIdx] === tr;
+  return (active ? gemMats.bright : gemMats.dim)[gem.lane];
+}
+
+function isCaptured(tr, phrase){
+  return tr.capturedUntilPhrase !== null && phrase <= tr.capturedUntilPhrase;
+}
+
+/* spawn / cull / position gems for one track */
+function updateTrackGems(tr, now){
+  // spawn
+  while (tr._spawnPtr < tr._gems.length){
+    const gem = tr._gems[tr._spawnPtr];
+    if (gem.time - now > CONFIG.spawnAhead) break;
+    tr._spawnPtr++;
+    if (gem.hit || isCaptured(tr, gem.phrase)) continue;
+    const mesh = getGemMesh(tr);
+    mesh.material = gemMaterial(tr, gem);
+    mesh.position.set(LANE_X[gem.lane], -R + 0.4, HIT_Z - (gem.time - now) * SPEED);
+    gem.mesh = mesh;
+    tr._live.add(gem);
+  }
+  // position / cull
+  for (const gem of tr._live){
+    if (gem.hit || isCaptured(tr, gem.phrase)){ releaseGemMesh(tr, gem); continue; }
+    const z = HIT_Z - (gem.time - now) * SPEED;
+    if (z > -0.6){ releaseGemMesh(tr, gem); continue; }
+    gem.mesh.position.z = z;
+    gem.mesh.rotation.y += 0.05;
+    gem.mesh.rotation.z += 0.02;
+  }
+}
+
+function refreshGemMaterials(){
+  for (const tr of SONG.tracks){
+    for (const gem of tr._live){
+      if (gem.mesh) gem.mesh.material = gemMaterial(tr, gem);
+    }
+  }
+}
+
+/* tunnel rotation tween */
+const rotAnim = { active:false, from:0, to:0, t0:0 };
+function rotateTunnelTo(wall){
+  let to = -wallAngle(wall);
+  const cur = tunnelGroup.rotation.z;
+  while (to - cur > Math.PI)  to -= Math.PI * 2;
+  while (to - cur < -Math.PI) to += Math.PI * 2;
+  rotAnim.active = true;
+  rotAnim.from = cur;
+  rotAnim.to = to;
+  rotAnim.t0 = performance.now();
+}
+
+function updateWallVisuals(now, pulse){
+  const phrase = Math.max(0, Math.floor(now / PHRASE_SEC));
+  for (let w = 0; w < WALL_COUNT; w++){
+    const wr = wallRender[w];
+    if (!wr.track) continue;
+    const tr = wr.track;
+    const active = SONG.tracks[G.activeIdx] === tr;
+    const captured = isCaptured(tr, phrase);
+    wr.plane.material.opacity = captured ? 0.18 + 0.16 * pulse : (active ? 0.11 : 0.05);
+    wr.hitLine.material.opacity = active ? 0.7 + 0.3 * pulse : 0.18;
+    wr.zoneBand.material.opacity = captured ? 0 : (active ? 0.10 + 0.08 * pulse : 0.03);
+    wr.perfectBand.material.opacity = captured ? 0 : (active ? 0.10 + 0.10 * pulse : 0.02);
+    const recScale = active ? 1 + 0.10 * pulse : 0.92;
+    for (let l = 0; l < wr.receptors.length; l++){
+      const rec = wr.receptors[l];
+      const vis = !captured;
+      rec.ring.visible = vis; rec.fill.visible = vis; rec.dot.visible = vis;
+      const prevPop = rec.pop;
+      rec.pop = Math.max(0, rec.pop - 0.07);
+      if (prevPop > 0 && rec.pop === 0){
+        rec.fill.material.color.setHex(LANE_COLORS[l]);
+        rec.ring.material.color.setHex(LANE_COLORS[l]);
+      }
+      const s = recScale + 0.35 * rec.pop;
+      rec.ring.scale.setScalar(s);
+      rec.fill.scale.setScalar(s);
+      rec.ring.material.opacity = active ? 0.85 + 0.15 * pulse : 0.18;
+      rec.fill.material.opacity = (active ? 0.05 + 0.07 * pulse : 0.02) + 0.45 * rec.pop;
+      rec.dot.material.opacity = active ? 0.6 : 0.12;
+    }
+    const lineOp = captured ? 0.55 + 0.3 * pulse : (active ? 0.5 : 0.22);
+    for (const ln of wr.laneLines) ln.material.opacity = lineOp;
+    for (const fl of wr.flashes){
+      if (fl.material.opacity > 0) fl.material.opacity = Math.max(0, fl.material.opacity - 0.06);
+    }
+  }
+}
+
+function showJudge(text, color){
+  ui.judge.textContent = text;
+  ui.judge.style.color = color;
+  ui.judge.style.textShadow = '0 0 14px ' + color;
+  ui.judge.className = '';
+  void ui.judge.offsetWidth;     // restart the animation
+  ui.judge.className = 'show';
+}
+
+// fires on EVERY lane keypress: kind = perfect | good | miss | dead
+// good carries offSec (signed: negative = early, positive = late)
+function pressFeedback(lane, kind, offSec){
+  const wr = SONG.tracks[G.activeIdx]._wr;
+  if (!wr) return;
+  const FB = { perfect:0xffffff, good:LANE_COLORS[lane], miss:0xff3355, dead:0x6b7385 };
+  const c = FB[kind];
+  const rec = wr.receptors[lane];
+  if (rec){
+    rec.pop = kind === 'dead' ? 0.45 : 1;
+    rec.fill.material.color.setHex(c);
+    rec.ring.material.color.setHex(kind === 'miss' || kind === 'dead' ? c : LANE_COLORS[lane]);
+  }
+  const fl = wr.flashes[lane];
+  fl.material.color.setHex(c);
+  fl.material.opacity = kind === 'dead' ? 0.25 : 0.55;
+  if (kind === 'perfect'){
+    showJudge('PERFECT', '#ffffff');
+  } else if (kind === 'good'){
+    const ms = Math.round(offSec * 1000);
+    const hex = '#' + LANE_COLORS[lane].toString(16).padStart(6, '0');
+    showJudge(ms < 0 ? (-ms) + ' ms EARLY' : ms + ' ms LATE', hex);
+  } else if (kind === 'miss'){
+    showJudge('MISS', '#ff3355');
+  }
+}
+
+/* ---------------- game state & rules ---------------- */
+let G = null;
+
+function nowSong(){ return audio.ctx.currentTime - G.songStart; }
+function phraseStartTime(p){ return G.songStart + p * PHRASE_SEC; }
+
+function newGame(){
+  nextStep = 0;
+  for (const tr of SONG.tracks){
+    tr.capturedUntilPhrase = null;
+    if (tr._gain){
+      tr._gain.gain.cancelScheduledValues(audio.ctx.currentTime);
+      tr._gain.gain.setValueAtTime(0, audio.ctx.currentTime);
+    }
+    for (const gem of tr._gems){
+      gem.hit = false; gem.missed = false;
+      if (gem.mesh) releaseGemMesh(tr, gem);
+    }
+    tr._live.clear();
+    tr._spawnPtr = 0;
+  }
+  G = {
+    state:'countin',
+    songStart: audio.ctx.currentTime + 0.3 + CONFIG.countInBeats * SPB,
+    score:0, mult:1, bestMult:1, energy:60,
+    hits:0, misses:0, captures:0, capturedTracks:new Set(),
+    activeIdx:0, lastPhrase:-1, lastCount:-1, fullBonusArmed:true,
+    attempt:{ p:-1, active:false, broken:true, total:0, hits:0 }
+  };
+  // count-in ticks
+  for (let i = 0; i < CONFIG.countInBeats; i++){
+    playVoice('tickHi', G.songStart - (CONFIG.countInBeats - i) * SPB, 81, 0.08, audio.master);
+  }
+  tunnelGroup.rotation.z = -wallAngle(SONG.tracks[0].wall);
+  rotAnim.active = false;
+  refreshGemMaterials();
+  ui.hud.classList.remove('hidden');
+  ui.title.classList.add('hidden');
+  ui.results.classList.add('hidden');
+  updateRing();
+  updateTrackLabel();
+  setHud();
+}
+
+function setupAttempt(p, fresh){
+  const tr = SONG.tracks[G.activeIdx];
+  const gems = tr._byPhrase[p] || [];
+  const captured = isCaptured(tr, p);
+  let valid = !captured && gems.length > 0;
+  if (valid && !fresh){
+    // rotated in mid-phrase: only valid if nothing already slipped past
+    const t = nowSong();
+    valid = gems.every(g => g.hit || g.time >= t - HIT_WINDOW);
+  }
+  const hits = gems.reduce((n, g) => n + (g.hit ? 1 : 0), 0);
+  G.attempt = { p, active:valid, broken:!valid, total:gems.length, hits };
+  if (valid && hits === gems.length) captureTrack(tr, p); // all early-hit edge
+}
+
+function onPhraseBoundary(p){
+  G.lastPhrase = p;
+  for (const tr of SONG.tracks){
+    if (tr.capturedUntilPhrase !== null && p > tr.capturedUntilPhrase){
+      tr.capturedUntilPhrase = null;   // window over: track reopens
+    }
+  }
+  setupAttempt(p, true);
+  updateRing();
+  updateTrackLabel();
+}
+
+function breakPhrase(){
+  const a = G.attempt;
+  if (!a.active || a.broken) return;
+  a.broken = true;
+  G.mult = 1;
+  G.energy = Math.max(0, G.energy - 15);
+  showMsg('PHRASE BROKEN', 'bad');
+  playVoice('breakBuzz', audio.ctx.currentTime + 0.005, 38, 0.2, audio.hitBus);
+  // grey out what's left of this phrase
+  const tr = SONG.tracks[G.activeIdx];
+  for (const gem of tr._byPhrase[a.p]){
+    if (!gem.hit && !gem.missed && gem.mesh) gem.mesh.material = gemMats.miss;
+  }
+}
+
+function captureTrack(tr, p){
+  tr.capturedUntilPhrase = Math.min(p + CAPTURE_PHRASES, TOTAL_PHRASES - 1);
+  G.captures++;
+  G.capturedTracks.add(tr.name);
+  G.mult = Math.min(4, G.mult + 1);
+  G.bestMult = Math.max(G.bestMult, G.mult);
+  G.score += 1000 * G.mult;
+  G.energy = Math.min(100, G.energy + 12);
+  G.attempt.active = false;
+  showMsg(tr.name + ' CAPTURED', 'good');
+  // unmute now, schedule the remute at the window's end
+  const g = tr._gain.gain, n = audio.ctx.currentTime;
+  g.cancelScheduledValues(n);
+  g.setValueAtTime(g.value, n);
+  g.linearRampToValueAtTime(1, n + 0.05);
+  const endT = phraseStartTime(tr.capturedUntilPhrase + 1);
+  if (endT > n + 0.1){
+    g.setValueAtTime(1, endT - 0.06);
+    g.linearRampToValueAtTime(0, endT);
+  }
+  // hide gems inside the captured window
+  for (const gem of tr._live){
+    if (gem.phrase <= tr.capturedUntilPhrase) releaseGemMesh(tr, gem);
+  }
+  // full-spectrum bonus: all five locked at once
+  if (G.fullBonusArmed && SONG.tracks.every(t => isCaptured(t, p))){
+    G.fullBonusArmed = false;
+    G.score += 5000;
+    setTimeout(() => showMsg('FULL SPECTRUM +5000', 'neutral'), 900);
+  }
+  if (!SONG.tracks.every(t => isCaptured(t, p))) G.fullBonusArmed = true;
+  updateRing();
+  updateTrackLabel();
+}
+
+function onLaneInput(lane){
+  if (!G || G.state !== 'playing') return;
+  const tr = SONG.tracks[G.activeIdx];
+  const t = nowSong();
+  const p = Math.max(0, Math.floor(t / PHRASE_SEC));
+  // candidates in this phrase and the next (early hits across the boundary)
+  let best = null, bestDt = Infinity;
+  for (const ph of [p, p + 1]){
+    const gems = tr._byPhrase[ph];
+    if (!gems || (ph !== p && isCaptured(tr, ph))) continue;
+    for (const gem of gems){
+      if (gem.lane !== lane || gem.hit || gem.missed) continue;
+      const dt = Math.abs(gem.time - t);
+      if (dt <= HIT_WINDOW && dt < bestDt){ best = gem; bestDt = dt; }
+    }
+  }
+  const a = G.attempt;
+  if (best){
+    if (best.phrase === p && (!a.active || a.broken)){
+      pressFeedback(lane, 'dead');   // dead phrase: press registers, no effect
+      return;
+    }
+    best.hit = true;
+    const off = t - best.time;       // signed: negative = early, positive = late
+    const perfect = bestDt <= PERFECT_WINDOW;
+    G.score += (perfect ? 200 : 100) * G.mult;
+    G.hits++;
+    G.energy = Math.min(100, G.energy + 0.5);
+    playVoice(best.inst, audio.ctx.currentTime + 0.005, best.note, best.lenSec, audio.hitBus);
+    pressFeedback(lane, perfect ? 'perfect' : 'good', off);
+    releaseGemMesh(tr, best);
+    if (best.phrase === p){
+      a.hits++;
+      if (a.hits >= a.total) captureTrack(tr, p);
+    }
+  } else if (a.active && !a.broken){
+    pressFeedback(lane, 'miss');
+    breakPhrase(); // empty press — Frequency-strict
+  } else {
+    pressFeedback(lane, 'dead');     // empty press in an already-dead phrase
+  }
+}
+
+function missCheck(t, p){
+  const tr = SONG.tracks[G.activeIdx];
+  const gems = tr._byPhrase[p];
+  if (!gems) return;
+  for (const gem of gems){
+    if (gem.hit || gem.missed || isCaptured(tr, p)) continue;
+    if (gem.time < t - HIT_WINDOW){
+      gem.missed = true;
+      G.misses++;
+      if (gem.mesh) gem.mesh.material = gemMats.miss;
+      breakPhrase();
+    }
+  }
+}
+
+function rotate(dir){
+  if (!G || (G.state !== 'playing' && G.state !== 'countin')) return;
+  const n = SONG.tracks.length;
+  G.activeIdx = (G.activeIdx + dir + n) % n;
+  rotateTunnelTo(SONG.tracks[G.activeIdx].wall);
+  refreshGemMaterials();
+  if (G.state === 'playing'){
+    setupAttempt(Math.max(0, Math.floor(nowSong() / PHRASE_SEC)), false);
+  }
+  updateRing();
+  updateTrackLabel();
+}
+
+function finish(kind){
+  G.state = 'over';
+  for (const tr of SONG.tracks){
+    const g = tr._gain.gain, n = audio.ctx.currentTime;
+    g.cancelScheduledValues(n);
+    g.setValueAtTime(g.value, n);
+    g.linearRampToValueAtTime(0, n + 0.4);
+  }
+  const judged = G.hits + G.misses;
+  const acc = judged ? Math.round(100 * G.hits / judged) : 0;
+  let grade = 'D';
+  if (kind === 'fail') grade = 'F';
+  else if (G.captures >= 30 && acc >= 95) grade = 'S';
+  else if (G.captures >= 22 && acc >= 88) grade = 'A';
+  else if (G.captures >= 14 && acc >= 75) grade = 'B';
+  else if (G.captures >= 7) grade = 'C';
+  ui.results.classList.toggle('fail', kind === 'fail');
+  document.getElementById('grade').textContent = grade;
+  document.getElementById('verdict').textContent = kind === 'fail' ? 'SIGNAL LOST' : 'SIGNAL CLEAR';
+  document.getElementById('r-score').textContent = G.score.toLocaleString();
+  document.getElementById('r-hits').textContent = G.hits + ' / ' + judged;
+  document.getElementById('r-acc').textContent = acc + '%';
+  document.getElementById('r-caps').textContent = G.captures;
+  document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
+  document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
+  ui.results.classList.remove('hidden');
+}
+
+/* ---------------- input layer ----------------
+   Keyboard is the only v1 backend; gameplay code receives
+   semantic actions only (touch can be added as a second
+   emitter without touching game logic). */
+const INPUT = {
+  emit(action){
+    switch (action){
+      case 'lane0': case 'lane1': case 'lane2':
+        onLaneInput(+action.slice(4)); break;
+      case 'rotateLeft':  rotate(-1); break;
+      case 'rotateRight': rotate(1);  break;
+      case 'pause': togglePause(); break;
+    }
+  }
+};
+
+let appState = 'title'; // title | running | over
+window.addEventListener('keydown', (e) => {
+  if (['ArrowLeft','ArrowDown','ArrowRight','ArrowUp','Space'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  if (appState === 'title'){ startGame(); return; }
+  if (appState === 'over' || (G && G.state === 'over')){
+    if (e.code === 'KeyR'){ newGame(); appState = 'running'; }
+    return;
+  }
+  const action = CONFIG.keymap[e.code];
+  if (action) INPUT.emit(action);
+});
+document.getElementById('title').addEventListener('click', () => {
+  if (appState === 'title') startGame();
+});
+document.getElementById('results').addEventListener('click', () => {
+  if (G && G.state === 'over'){ newGame(); appState = 'running'; }
+});
+
+function togglePause(){
+  if (!G || G.state === 'over') return;
+  if (audio.ctx.state === 'running'){
+    audio.ctx.suspend();          // freezes currentTime → everything pauses in sync
+    ui.pause.classList.remove('hidden');
+  } else {
+    audio.ctx.resume();
+    ui.pause.classList.add('hidden');
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && G && G.state !== 'over' && audio.ctx && audio.ctx.state === 'running'){
+    togglePause();
+  }
+});
+
+function startGame(){
+  appState = 'running';
+  if (!audio.ctx) initAudio();
+  audio.ctx.resume().then(() => {
+    if (!schedTimer) schedTimer = setInterval(schedulerTick, 25);
+    newGame();
+  });
+}
+
+/* ---------------- HUD ---------------- */
+const ui = {
+  hud: document.getElementById('hud'),
+  title: document.getElementById('title'),
+  pause: document.getElementById('pause'),
+  results: document.getElementById('results'),
+  score: document.getElementById('score'),
+  judge: document.getElementById('judge'),
+  mult: document.getElementById('mult'),
+  energy: document.getElementById('energy'),
+  progress: document.getElementById('progress'),
+  barcount: document.getElementById('barcount'),
+  trackname: document.getElementById('trackname'),
+  trackstate: document.getElementById('trackstate'),
+  msg: document.getElementById('msg'),
+  count: document.getElementById('count'),
+  ring: document.getElementById('ring')
+};
+
+function showMsg(text, cls){
+  ui.msg.textContent = text;
+  ui.msg.className = '';
+  void ui.msg.offsetWidth;       // restart the animation
+  ui.msg.className = 'show ' + cls;
+}
+
+function setHud(){
+  ui.score.textContent = G.score.toLocaleString();
+  ui.mult.textContent = '\u00d7' + G.mult;
+  ui.mult.classList.toggle('maxed', G.mult >= 4);
+  ui.energy.style.width = G.energy + '%';
+  ui.energy.classList.toggle('low', G.energy < 25);
+}
+
+function updateTrackLabel(){
+  const tr = SONG.tracks[G.activeIdx];
+  const p = Math.max(0, Math.floor(nowSong() / PHRASE_SEC));
+  ui.trackname.style.color = '#' + tr.color.toString(16).padStart(6, '0');
+  let state = 'OPEN';
+  if (isCaptured(tr, p)){
+    state = 'LOCKED \u00b7 ' + ((tr.capturedUntilPhrase - p + 1) * PHRASE_BARS) + ' BARS';
+  } else if (!(tr._byPhrase[p] || []).length){
+    state = 'NO GEMS THIS PHRASE';
+  } else if (G.attempt.broken && G.attempt.p === p){
+    state = 'BROKEN \u00b7 NEXT PHRASE';
+  }
+  ui.trackname.innerHTML = '';
+  ui.trackname.appendChild(document.createTextNode(tr.name));
+  const span = document.createElement('span');
+  span.id = 'trackstate';
+  span.textContent = state;
+  ui.trackname.appendChild(span);
+}
+
+/* status ring: 8 octagon edges, rotates in sync with the tunnel */
+const ringSegs = [];
+function buildRingHud(){
+  const NS = 'http://www.w3.org/2000/svg';
+  const r = 24, cx = 32, cy = 32;
+  for (let w = 0; w < WALL_COUNT; w++){
+    const a0 = -Math.PI / 2 + wallAngle(w) - Math.PI / 8;
+    const a1 = -Math.PI / 2 + wallAngle(w) + Math.PI / 8;
+    const seg = document.createElementNS(NS, 'line');
+    seg.setAttribute('x1', cx + r * Math.cos(a0));
+    seg.setAttribute('y1', cy - r * Math.sin(a0));
+    seg.setAttribute('x2', cx + r * Math.cos(a1));
+    seg.setAttribute('y2', cy - r * Math.sin(a1));
+    seg.setAttribute('stroke-width', '4');
+    seg.setAttribute('stroke-linecap', 'round');
+    ui.ring.appendChild(seg);
+    ringSegs.push(seg);
+  }
+}
+function updateRing(){
+  const p = G ? Math.max(0, Math.floor(nowSong() / PHRASE_SEC)) : 0;
+  for (let w = 0; w < WALL_COUNT; w++){
+    const wr = wallRender[w];
+    const seg = ringSegs[w];
+    if (!wr || !wr.track){
+      seg.setAttribute('stroke', '#181d29');
+      seg.setAttribute('opacity', '1');
+      continue;
+    }
+    const tr = wr.track;
+    const col = '#' + tr.color.toString(16).padStart(6, '0');
+    seg.setAttribute('stroke', col);
+    if (isCaptured(tr, p)) seg.setAttribute('opacity', '1');
+    else if (!(tr._byPhrase[p] || []).length) seg.setAttribute('opacity', '0.15');
+    else seg.setAttribute('opacity', '0.4');
+    seg.setAttribute('stroke-width', SONG.tracks[G ? G.activeIdx : 0] === tr ? '6' : '4');
+  }
+}
+
+function buildTitle(){
+  const m = SONG.meta;
+  document.getElementById('titlemeta').textContent =
+    m.title + ' \u00b7 ' + m.bpm + ' BPM \u00b7 ' + m.lengthBars + ' BARS \u00b7 ' + m.difficulty;
+  const L = CONFIG.inputLabels;
+  const rows = [
+    ['<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>', 'HIT LANES'],
+    ['<kbd>' + L.rotateLeft + '</kbd> <kbd>' + L.rotateRight + '</kbd>', 'ROTATE TUNNEL'],
+    ['<kbd>' + L.pause + '</kbd>', 'PAUSE']
+  ];
+  document.getElementById('howto').innerHTML =
+    rows.map(r => '<div class="keys">' + r[0] + '</div><div>' + r[1] + '</div>').join('');
+  document.getElementById('keyhints').innerHTML =
+    '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
+    '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+}
+
+/* ---------------- main loop (visuals only) ---------------- */
+function frame(){
+  requestAnimationFrame(frame);
+  if (!renderer) return;
+
+  if (!G){ // idle title spin
+    tunnelGroup.rotation.z += 0.0012;
+    renderer.render(scene, camera);
+    return;
+  }
+
+  const t = nowSong();
+  const pulse = Math.max(0, 1 - ((t % SPB) + SPB) % SPB / SPB * 3);
+
+  if (G.state === 'countin'){
+    if (t >= 0){
+      G.state = 'playing';
+      ui.count.className = '';
+      ui.count.style.opacity = '0';
+      showMsg('GO', 'neutral');
+    } else {
+      const c = Math.ceil(-t / SPB);
+      if (c !== G.lastCount && c <= CONFIG.countInBeats){
+        G.lastCount = c;
+        ui.count.textContent = c;
+        ui.count.className = '';
+        void ui.count.offsetWidth;
+        ui.count.className = 'tick';
+      }
+    }
+  }
+
+  if (G.state === 'playing'){
+    const p = Math.max(0, Math.floor(t / PHRASE_SEC));
+    if (p !== G.lastPhrase) onPhraseBoundary(p);
+    missCheck(t, p);
+    if (G.energy <= 0) finish('fail');
+    else if (t > SONG.meta.lengthBars * SPBAR + 0.4) finish('clear');
+  }
+
+  if (G.state === 'playing' || G.state === 'countin'){
+    for (const tr of SONG.tracks) updateTrackGems(tr, t);
+    updateWallVisuals(t, pulse);
+    camera.position.y = 0.1 * pulse;
+    // HUD
+    setHud();
+    const bar = Math.min(SONG.meta.lengthBars, Math.max(0, Math.floor(t / SPBAR)) + 1);
+    ui.barcount.textContent = 'BAR ' + bar + ' / ' + SONG.meta.lengthBars;
+    ui.progress.style.width = Math.min(100, Math.max(0, t / (SONG.meta.lengthBars * SPBAR) * 100)) + '%';
+  }
+
+  // rotation tween (audio clock pauses with ctx.suspend → tween uses perf clock,
+  // purely cosmetic and ~150ms, acceptable)
+  if (rotAnim.active){
+    const k = Math.min(1, (performance.now() - rotAnim.t0) / (CONFIG.rotateTween * 1000));
+    const ease = 1 - Math.pow(1 - k, 3);
+    tunnelGroup.rotation.z = rotAnim.from + (rotAnim.to - rotAnim.from) * ease;
+    if (k >= 1) rotAnim.active = false;
+  }
+  ui.ring.style.transform = 'rotate(' + (-tunnelGroup.rotation.z * 180 / Math.PI) + 'deg)';
+
+  renderer.render(scene, camera);
+}
+
+/* ---------------- boot ---------------- */
+prepareSong();
+initScene();
+buildRingHud();
+buildTitle();
+updateRingIdle();
+function updateRingIdle(){
+  for (let w = 0; w < WALL_COUNT; w++){
+    const wr = wallRender[w];
+    const seg = ringSegs[w];
+    if (!wr || !wr.track){ seg.setAttribute('stroke', '#181d29'); continue; }
+    seg.setAttribute('stroke', '#' + wr.track.color.toString(16).padStart(6, '0'));
+    seg.setAttribute('opacity', '0.4');
+  }
+}
+frame();
+</script>
+</body>
+</html>

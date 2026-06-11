@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PULSE</title>
+<style>
+  :root{
+    --lane0:#33eeff; --lane1:#ff44dd; --lane2:#ffcc33;
+    --bad:#ff3355; --good:#21d4a7; --ink:#cfe3ff; --dim:#5a6a8a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
+    color:var(--ink);-webkit-user-select:none;user-select:none}
+  #scene{position:fixed;inset:0}
+  #scene canvas{display:block}
+
+  .hidden{display:none !important}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #topbar{position:absolute;top:0;left:0;right:0;display:flex;
+    justify-content:space-between;align-items:flex-start;padding:14px 18px}
+  #scorebox{text-align:left}
+  #score{font-size:clamp(20px,3.2vw,34px);font-weight:700;letter-spacing:.08em;
+    color:#fff;text-shadow:0 0 12px rgba(120,200,255,.8)}
+  #mult{font-size:clamp(12px,1.6vw,17px);letter-spacing:.3em;color:var(--lane2);
+    text-shadow:0 0 10px rgba(255,204,51,.7);margin-top:2px}
+  #mult.maxed{color:#fff;animation:multpulse .5s infinite alternate}
+  @keyframes multpulse{from{text-shadow:0 0 8px #ffcc33}to{text-shadow:0 0 22px #ffcc33,0 0 40px #ff44dd}}
+
+  #progresswrap{position:absolute;left:50%;top:14px;transform:translateX(-50%);
+    width:min(38vw,420px);height:4px;background:rgba(120,160,255,.12);
+    border:1px solid rgba(120,160,255,.25)}
+  #progress{height:100%;width:0%;background:linear-gradient(90deg,var(--lane0),var(--lane1));
+    box-shadow:0 0 8px rgba(120,200,255,.7)}
+  #barcount{position:absolute;left:50%;top:24px;transform:translateX(-50%);
+    font-size:10px;letter-spacing:.25em;color:var(--dim)}
+
+  #ringwrap{width:72px;height:72px}
+  #ring{width:100%;height:100%;overflow:visible;transition:none}
+
+  #trackname{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);
+    font-size:clamp(13px,1.8vw,18px);letter-spacing:.35em;text-align:center;
+    color:#fff;text-shadow:0 0 14px currentColor;white-space:nowrap}
+  #trackstate{display:block;font-size:10px;letter-spacing:.3em;margin-top:4px;color:var(--dim)}
+
+  #energywrap{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);
+    width:min(44vw,360px);height:10px;background:rgba(120,160,255,.08);
+    border:1px solid rgba(120,160,255,.3);transform-origin:center}
+  #energy{height:100%;width:60%;background:var(--good);
+    box-shadow:0 0 10px var(--good);transition:width .15s linear,background .2s}
+  #energy.low{background:var(--bad);box-shadow:0 0 12px var(--bad);
+    animation:energyblink .35s infinite alternate}
+  @keyframes energyblink{from{opacity:1}to{opacity:.45}}
+
+  #keyhints{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    display:flex;gap:14px;font-size:10px;letter-spacing:.18em;color:var(--dim)}
+  #keyhints b{color:var(--ink)}
+
+  #msg{position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);
+    font-size:clamp(20px,3.6vw,40px);font-weight:700;letter-spacing:.4em;
+    text-align:center;opacity:0;white-space:nowrap}
+  #msg.show{animation:msgpop 1.1s ease-out forwards}
+  #msg.good{color:var(--good);text-shadow:0 0 18px var(--good),0 0 50px var(--good)}
+  #msg.bad{color:var(--bad);text-shadow:0 0 18px var(--bad)}
+  #msg.neutral{color:#fff;text-shadow:0 0 18px rgba(160,220,255,.9)}
+  #judge{position:absolute;bottom:26%;left:50%;transform:translateX(-50%);
+    font-size:clamp(13px,1.6vw,19px);font-weight:700;letter-spacing:.3em;
+    text-align:center;opacity:0;white-space:nowrap}
+  #judge.show{animation:judgepop .7s ease-out forwards}
+  @keyframes judgepop{0%{opacity:1;transform:translateX(-50%) scale(1.18)}
+    55%{opacity:1;transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) scale(1)}}
+  @keyframes msgpop{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+    12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}
+    22%{transform:translate(-50%,-50%) scale(1)}
+    75%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.02)}
+  }
+
+  #count{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);
+    font-size:clamp(60px,12vw,140px);font-weight:700;color:#fff;
+    text-shadow:0 0 30px var(--lane0),0 0 80px var(--lane1);opacity:0}
+  #count.tick{animation:countpop .5s ease-out}
+  @keyframes countpop{0%{opacity:0;transform:translate(-50%,-50%) scale(1.4)}
+    20%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    80%{opacity:1}100%{opacity:0}}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:radial-gradient(ellipse at center,rgba(4,6,20,.82),rgba(0,0,4,.95));
+    backdrop-filter:blur(3px);padding:24px}
+  .gametitle{font-size:clamp(54px,11vw,120px);font-weight:700;letter-spacing:.32em;
+    margin-left:.32em;color:#fff;
+    text-shadow:0 0 18px var(--lane0),0 0 60px var(--lane1),0 0 120px var(--lane1)}
+  .subtitle{font-size:clamp(10px,1.4vw,14px);letter-spacing:.5em;margin:10px 0 4px .5em;
+    color:var(--dim)}
+  .songmeta{font-size:clamp(11px,1.5vw,15px);letter-spacing:.25em;color:var(--lane0);
+    margin:22px 0 6px;text-shadow:0 0 10px rgba(51,238,255,.6)}
+
+  .howto{margin-top:26px;display:grid;grid-template-columns:auto auto;
+    gap:10px 22px;font-size:clamp(11px,1.4vw,14px);letter-spacing:.12em;
+    text-align:left;align-items:center}
+  .howto .keys{text-align:right}
+  kbd{display:inline-block;min-width:26px;padding:4px 8px;margin:0 2px;
+    border:1px solid rgba(140,180,255,.45);border-bottom-width:3px;border-radius:4px;
+    background:rgba(20,30,60,.6);color:#fff;font-family:inherit;font-size:.92em;
+    text-align:center;box-shadow:0 0 8px rgba(80,140,255,.25)}
+
+  .startprompt{margin-top:34px;font-size:clamp(12px,1.6vw,16px);letter-spacing:.35em;
+    color:#fff;animation:blink 1.2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .footnote{margin-top:18px;font-size:10px;letter-spacing:.25em;color:var(--dim)}
+
+  #results .grade{font-size:clamp(80px,16vw,170px);font-weight:700;line-height:1;
+    color:#fff;text-shadow:0 0 24px var(--lane0),0 0 90px var(--lane1)}
+  #results .verdict{font-size:clamp(16px,2.6vw,26px);letter-spacing:.5em;margin:8px 0 26px .5em}
+  #results.fail .grade,#results.fail .verdict{color:var(--bad);
+    text-shadow:0 0 24px var(--bad)}
+  .stats{display:grid;grid-template-columns:auto auto;gap:8px 30px;
+    font-size:clamp(12px,1.6vw,16px);letter-spacing:.15em;text-align:left}
+  .stats .v{text-align:right;color:#fff}
+  #pause .gametitle{font-size:clamp(30px,6vw,60px)}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div id="scorebox">
+      <div id="score">0</div>
+      <div id="mult">&times;1</div>
+    </div>
+    <div id="ringwrap"><svg id="ring" viewBox="0 0 64 64"></svg></div>
+  </div>
+  <div id="progresswrap"><div id="progress"></div></div>
+  <div id="barcount">BAR 1 / 96</div>
+  <div id="trackname">DRUMS<span id="trackstate">OPEN</span></div>
+  <div id="energywrap"><div id="energy"></div></div>
+  <div id="keyhints"></div>
+  <div id="msg"></div>
+  <div id="judge"></div>
+  <div id="count"></div>
+</div>
+
+<div id="title" class="overlay">
+  <div class="gametitle">PULSE</div>
+  <div class="subtitle">CAPTURE THE SIGNAL</div>
+  <div class="songmeta" id="titlemeta"></div>
+  <div class="howto" id="howto"></div>
+  <div class="startprompt">CLICK OR PRESS ANY KEY</div>
+  <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="gametitle">PAUSED</div>
+  <div class="startprompt">PRESS ESC TO RESUME</div>
+</div>
+
+<div id="results" class="overlay hidden">
+  <div class="grade" id="grade">A</div>
+  <div class="verdict" id="verdict">SIGNAL CLEAR</div>
+  <div class="stats">
+    <span>SCORE</span><span class="v" id="r-score">0</span>
+    <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
+    <span>ACCURACY</span><span class="v" id="r-acc">0%</span>
+    <span>CAPTURES</span><span class="v" id="r-caps">0</span>
+    <span>TRACKS CAPTURED</span><span class="v" id="r-tracks">0 / 5</span>
+    <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
+  </div>
+  <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*{{MODULES}}*/
+</script>
+</body>
+</html>
