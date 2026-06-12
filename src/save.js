@@ -2,12 +2,14 @@
    One versioned localStorage key, managed only by this module.
    Storage may be unavailable (private browsing) or the blob corrupt:
    SAVE never throws past this file and the game stays fully playable
-   with session-only state. Blob contents: per-song bests + settings,
-   nothing else. */
+   with session-only state. Blob contents: per-song top-5 score lists
+   + settings, nothing else. */
 const SAVE_KEY = 'pulse.save.v1';
+const SAVE_MAX_SCORES = 5;
 
 const SAVE = (() => {
   const blank = () => ({ version:1, songs:{}, settings:{} });
+  const validRun = (r) => r && typeof r.score === 'number';
 
   let store = null;
   try {
@@ -25,6 +27,11 @@ const SAVE = (() => {
           parsed.songs && typeof parsed.songs === 'object' &&
           parsed.settings && typeof parsed.settings === 'object'){
         data = parsed;
+        for (const id of Object.keys(data.songs)){
+          const e = data.songs[id];   // pre-top-5 blobs stored a single run
+          data.songs[id] = (Array.isArray(e) ? e : [e])
+            .filter(validRun).slice(0, SAVE_MAX_SCORES);
+        }
       }
     } catch (e){ /* corrupt blob: start fresh */ }
   }
@@ -36,19 +43,27 @@ const SAVE = (() => {
 
   return {
     persistent: !!store,
-    /* run: {score, grade, acc}; keeps the highest-scoring run per song.
-       Returns the stored best plus isNew for "fresh record" feedback. */
+    /* run: {score, grade, acc}; keeps the top SAVE_MAX_SCORES runs per
+       song, ties broken in favor of the older run. Returns the stored
+       list plus this run's rank in it (-1 if it didn't place). */
     recordResult(songId, run){
-      const prev = data.songs[songId];
-      const isNew = !prev || run.score > prev.score;
-      if (isNew){
-        data.songs[songId] = { score:run.score, grade:run.grade, acc:run.acc };
+      const list = data.songs[songId] || (data.songs[songId] = []);
+      let rank = list.findIndex(s => run.score > s.score);
+      if (rank === -1) rank = list.length;
+      if (rank >= SAVE_MAX_SCORES){
+        rank = -1;
+      } else {
+        list.splice(rank, 0, { score:run.score, grade:run.grade, acc:run.acc });
+        if (list.length > SAVE_MAX_SCORES) list.length = SAVE_MAX_SCORES;
         write();
       }
-      const best = data.songs[songId];
-      return { score:best.score, grade:best.grade, acc:best.acc, isNew };
+      return { scores:list.slice(), rank };
     },
-    getBest(songId){ return data.songs[songId] || null; },
+    getBest(songId){
+      const list = data.songs[songId];
+      return (list && list.length) ? list[0] : null;
+    },
+    getScores(songId){ return (data.songs[songId] || []).slice(); },
     getSetting(name, fallback){
       return Object.prototype.hasOwnProperty.call(data.settings, name)
         ? data.settings[name] : fallback;

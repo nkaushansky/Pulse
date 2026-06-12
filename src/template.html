@@ -124,6 +124,12 @@
   .stats{display:grid;grid-template-columns:auto auto;gap:8px 30px;
     font-size:clamp(12px,1.6vw,16px);letter-spacing:.15em;text-align:left}
   .stats .v{text-align:right;color:#fff}
+  #topscores{margin-top:24px;display:grid;grid-template-columns:auto auto auto auto;
+    gap:5px 20px;font-size:clamp(11px,1.4vw,14px);letter-spacing:.15em;text-align:right}
+  #topscores .h{grid-column:1/-1;text-align:center;color:var(--dim);
+    font-size:10px;letter-spacing:.35em;margin-bottom:2px}
+  #topscores span{color:var(--dim)}
+  #topscores span.cur{color:#fff;text-shadow:0 0 10px rgba(160,220,255,.9)}
   #pause .gametitle{font-size:clamp(30px,6vw,60px)}
 </style>
 </head>
@@ -167,13 +173,13 @@
   <div class="verdict" id="verdict">SIGNAL CLEAR</div>
   <div class="stats">
     <span>SCORE</span><span class="v" id="r-score">0</span>
-    <span>BEST SCORE</span><span class="v" id="r-best">0</span>
     <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
     <span>ACCURACY</span><span class="v" id="r-acc">0%</span>
     <span>CAPTURES</span><span class="v" id="r-caps">0</span>
     <span>TRACKS CAPTURED</span><span class="v" id="r-tracks">0 / 5</span>
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
+  <div id="topscores"></div>
   <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
 </div>
 

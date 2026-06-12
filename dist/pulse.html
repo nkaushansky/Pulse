@@ -124,6 +124,12 @@
   .stats{display:grid;grid-template-columns:auto auto;gap:8px 30px;
     font-size:clamp(12px,1.6vw,16px);letter-spacing:.15em;text-align:left}
   .stats .v{text-align:right;color:#fff}
+  #topscores{margin-top:24px;display:grid;grid-template-columns:auto auto auto auto;
+    gap:5px 20px;font-size:clamp(11px,1.4vw,14px);letter-spacing:.15em;text-align:right}
+  #topscores .h{grid-column:1/-1;text-align:center;color:var(--dim);
+    font-size:10px;letter-spacing:.35em;margin-bottom:2px}
+  #topscores span{color:var(--dim)}
+  #topscores span.cur{color:#fff;text-shadow:0 0 10px rgba(160,220,255,.9)}
   #pause .gametitle{font-size:clamp(30px,6vw,60px)}
 </style>
 </head>
@@ -167,13 +173,13 @@
   <div class="verdict" id="verdict">SIGNAL CLEAR</div>
   <div class="stats">
     <span>SCORE</span><span class="v" id="r-score">0</span>
-    <span>BEST SCORE</span><span class="v" id="r-best">0</span>
     <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
     <span>ACCURACY</span><span class="v" id="r-acc">0%</span>
     <span>CAPTURES</span><span class="v" id="r-caps">0</span>
     <span>TRACKS CAPTURED</span><span class="v" id="r-tracks">0 / 5</span>
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
+  <div id="topscores"></div>
   <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
 </div>
 
@@ -228,12 +234,14 @@ const LANE_COLORS = [0x33eeff, 0xff44dd, 0xffcc33];
    One versioned localStorage key, managed only by this module.
    Storage may be unavailable (private browsing) or the blob corrupt:
    SAVE never throws past this file and the game stays fully playable
-   with session-only state. Blob contents: per-song bests + settings,
-   nothing else. */
+   with session-only state. Blob contents: per-song top-5 score lists
+   + settings, nothing else. */
 const SAVE_KEY = 'pulse.save.v1';
+const SAVE_MAX_SCORES = 5;
 
 const SAVE = (() => {
   const blank = () => ({ version:1, songs:{}, settings:{} });
+  const validRun = (r) => r && typeof r.score === 'number';
 
   let store = null;
   try {
@@ -251,6 +259,11 @@ const SAVE = (() => {
           parsed.songs && typeof parsed.songs === 'object' &&
           parsed.settings && typeof parsed.settings === 'object'){
         data = parsed;
+        for (const id of Object.keys(data.songs)){
+          const e = data.songs[id];   // pre-top-5 blobs stored a single run
+          data.songs[id] = (Array.isArray(e) ? e : [e])
+            .filter(validRun).slice(0, SAVE_MAX_SCORES);
+        }
       }
     } catch (e){ /* corrupt blob: start fresh */ }
   }
@@ -262,19 +275,27 @@ const SAVE = (() => {
 
   return {
     persistent: !!store,
-    /* run: {score, grade, acc}; keeps the highest-scoring run per song.
-       Returns the stored best plus isNew for "fresh record" feedback. */
+    /* run: {score, grade, acc}; keeps the top SAVE_MAX_SCORES runs per
+       song, ties broken in favor of the older run. Returns the stored
+       list plus this run's rank in it (-1 if it didn't place). */
     recordResult(songId, run){
-      const prev = data.songs[songId];
-      const isNew = !prev || run.score > prev.score;
-      if (isNew){
-        data.songs[songId] = { score:run.score, grade:run.grade, acc:run.acc };
+      const list = data.songs[songId] || (data.songs[songId] = []);
+      let rank = list.findIndex(s => run.score > s.score);
+      if (rank === -1) rank = list.length;
+      if (rank >= SAVE_MAX_SCORES){
+        rank = -1;
+      } else {
+        list.splice(rank, 0, { score:run.score, grade:run.grade, acc:run.acc });
+        if (list.length > SAVE_MAX_SCORES) list.length = SAVE_MAX_SCORES;
         write();
       }
-      const best = data.songs[songId];
-      return { score:best.score, grade:best.grade, acc:best.acc, isNew };
+      return { scores:list.slice(), rank };
     },
-    getBest(songId){ return data.songs[songId] || null; },
+    getBest(songId){
+      const list = data.songs[songId];
+      return (list && list.length) ? list[0] : null;
+    },
+    getScores(songId){ return (data.songs[songId] || []).slice(); },
     getSetting(name, fallback){
       return Object.prototype.hasOwnProperty.call(data.settings, name)
         ? data.settings[name] : fallback;
@@ -1205,10 +1226,21 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
-  const best = SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc });
-  document.getElementById('r-best').textContent =
-    best.score.toLocaleString() + (best.isNew ? ' \u00b7 NEW' : '');
+  renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
   ui.results.classList.remove('hidden');
+}
+
+/* results-screen leaderboard; the just-finished run's row is highlighted */
+function renderTopScores(res){
+  let html = '<div class="h">TOP ' + SAVE_MAX_SCORES + '</div>';
+  res.scores.forEach((s, i) => {
+    const cls = i === res.rank ? ' class="cur"' : '';
+    html += '<span' + cls + '>' + (i + 1) + '</span>' +
+            '<span' + cls + '>' + s.score.toLocaleString() + '</span>' +
+            '<span' + cls + '>' + s.grade + '</span>' +
+            '<span' + cls + '>' + s.acc + '%</span>';
+  });
+  document.getElementById('topscores').innerHTML = html;
 }
 
 /* ---------------- input layer ----------------

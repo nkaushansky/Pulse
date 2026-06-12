@@ -219,9 +219,20 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
-  const best = SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc });
-  document.getElementById('r-best').textContent =
-    best.score.toLocaleString() + (best.isNew ? ' \u00b7 NEW' : '');
+  renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
   ui.results.classList.remove('hidden');
+}
+
+/* results-screen leaderboard; the just-finished run's row is highlighted */
+function renderTopScores(res){
+  let html = '<div class="h">TOP ' + SAVE_MAX_SCORES + '</div>';
+  res.scores.forEach((s, i) => {
+    const cls = i === res.rank ? ' class="cur"' : '';
+    html += '<span' + cls + '>' + (i + 1) + '</span>' +
+            '<span' + cls + '>' + s.score.toLocaleString() + '</span>' +
+            '<span' + cls + '>' + s.grade + '</span>' +
+            '<span' + cls + '>' + s.acc + '%</span>';
+  });
+  document.getElementById('topscores').innerHTML = html;
 }
 
