@@ -2,6 +2,47 @@
 
 Browser rhythm game (Frequency-style tunnel). Source lives in `src/`,
 built into a single self-contained file at `dist/pulse.html`.
+The V2 spec is `docs/pulse-v2-spec.md`; V1 architecture context is
+`docs/pulse-v2-handoff.md`.
+
+## V2 status & roadmap
+
+Done (in spec §-order; each section play-tested by the owner before
+the next starts — keep that gate):
+
+- **§0 Foundation** — src/ split + concat build; output was verified
+  byte-identical to the `v1` baseline.
+- **§1 Per-hit note audio** — see "Audio routing" below.
+- **§5 Persistence** — extended beyond spec: top-5 scores per song
+  (`SAVE_MAX_SCORES`), results-screen leaderboard. Fail runs may rank
+  (owner's call).
+- **§2 Song select + second song** — LUNAR DRIFT (easy, 100 BPM);
+  flow is title → select → count-in; format change documented below.
+- **§6 Difficulty & feel options** — OPTIONS screen from select (O);
+  see "Persistence" below for keys and the not-ranked rule.
+
+Remaining:
+
+- **§3 Touch/mobile input** — touch emitters into `INPUT.emit()` (zero
+  game-logic change), lane tap zones (min ~80px), swipe rotate,
+  responsive HUD via `CONFIG.inputLabels`, multi-touch, chart density
+  review on-device.
+- **§4 Latency calibration** — tap-along median offset (~16 taps) +
+  manual nudge; applies to judgment only (never audio/visual
+  scheduling); stored as a `SAVE` setting; suggest on first touch run.
+- **Release** — tag, deploy `dist/pulse.html` to nk00.com.
+
+Process notes:
+
+- Work lands on the session work branch; `main` is fast-forwarded only
+  after the owner's play-test passes. At session end `main` was at §2
+  (`6227a0e`); §6 (`0df20ad`) awaited play-test on the work branch.
+- This remote rejects tag pushes (branches only). Tags must be pushed
+  from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
+  567e3ca; git push origin v1 v2-foundation`.
+- Logic that can run outside the browser gets a Node test (stubbed
+  `window`/`localStorage`) before pushing; song packages are validated
+  against the contract the same way.
 
 ## Build
 
