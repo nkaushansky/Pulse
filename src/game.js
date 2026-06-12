@@ -204,12 +204,15 @@ function finish(kind){
   }
   const judged = G.hits + G.misses;
   const acc = judged ? Math.round(100 * G.hits / judged) : 0;
+  // capture thresholds scale with song length; ratios chosen so the
+  // 48-phrase NEON CIRCUIT keeps its V1 values (30/22/14/7)
+  const capsFor = (per48) => Math.round(TOTAL_PHRASES * per48 / 48);
   let grade = 'D';
   if (kind === 'fail') grade = 'F';
-  else if (G.captures >= 30 && acc >= 95) grade = 'S';
-  else if (G.captures >= 22 && acc >= 88) grade = 'A';
-  else if (G.captures >= 14 && acc >= 75) grade = 'B';
-  else if (G.captures >= 7) grade = 'C';
+  else if (G.captures >= capsFor(30) && acc >= 95) grade = 'S';
+  else if (G.captures >= capsFor(22) && acc >= 88) grade = 'A';
+  else if (G.captures >= capsFor(14) && acc >= 75) grade = 'B';
+  else if (G.captures >= capsFor(7)) grade = 'C';
   ui.results.classList.toggle('fail', kind === 'fail');
   document.getElementById('grade').textContent = grade;
   document.getElementById('verdict').textContent = kind === 'fail' ? 'SIGNAL LOST' : 'SIGNAL CLEAR';

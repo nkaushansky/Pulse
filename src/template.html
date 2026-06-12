@@ -131,6 +131,21 @@
   #topscores span{color:var(--dim)}
   #topscores span.cur{color:#fff;text-shadow:0 0 10px rgba(160,220,255,.9)}
   #pause .gametitle{font-size:clamp(30px,6vw,60px)}
+
+  /* ---------- song select ---------- */
+  .selecttitle{font-size:clamp(26px,5vw,52px)}
+  #songlist{margin-top:30px;display:flex;flex-direction:column;gap:14px;
+    width:min(92vw,560px)}
+  .songrow{border:1px solid rgba(120,160,255,.25);padding:14px 18px;
+    text-align:left;cursor:pointer;background:rgba(10,16,40,.35)}
+  .songrow.sel{border-color:#fff;background:rgba(30,50,100,.45);
+    box-shadow:0 0 18px rgba(120,200,255,.35)}
+  .songrow .st{font-size:clamp(15px,2.2vw,20px);letter-spacing:.25em;color:#fff;
+    text-shadow:0 0 10px currentColor}
+  .songrow .sm{margin-top:6px;font-size:clamp(10px,1.3vw,12px);
+    letter-spacing:.18em;color:var(--dim)}
+  .songrow .sb{margin-top:4px;font-size:clamp(10px,1.3vw,12px);
+    letter-spacing:.18em;color:var(--lane2)}
 </style>
 </head>
 <body>
@@ -163,6 +178,12 @@
   <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
 </div>
 
+<div id="select" class="overlay hidden">
+  <div class="gametitle selecttitle">SELECT SIGNAL</div>
+  <div id="songlist"></div>
+  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; ESC BACK</div>
+</div>
+
 <div id="pause" class="overlay hidden">
   <div class="gametitle">PAUSED</div>
   <div class="startprompt">PRESS ESC TO RESUME</div>
@@ -180,7 +201,7 @@
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
   <div id="topscores"></div>
-  <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
+  <div class="startprompt" style="margin-top:30px">R RETRY &middot; S SONG SELECT</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

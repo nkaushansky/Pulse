@@ -35,6 +35,17 @@ const INSTRUMENTS = {
   tickHi:     { type:'osc', wave:'square', filter:{type:'lowpass',freq:6000,q:0.7},
                 attack:0.001, decay:0.07, sustain:0, gain:0.5 },
   pulseTick:  { type:'noise', filter:{type:'highpass',freq:9500,q:0.7},
-                attack:0.0005, decay:0.018, sustain:0, gain:0.9 }
+                attack:0.0005, decay:0.018, sustain:0, gain:0.9 },
+  // gentler palette for the easy song (V2 §2)
+  kickSoft:   { type:'osc', wave:'sine', pitchEnv:{start:120,end:40,time:0.12},
+                attack:0.004, decay:0.30, sustain:0, gain:0.85 },
+  hatSoft:    { type:'noise', filter:{type:'highpass',freq:9000,q:0.6},
+                attack:0.002, decay:0.06, sustain:0, gain:0.22 },
+  pluckSoft:  { type:'osc', wave:'triangle', voices:2, detune:6,
+                filter:{type:'lowpass',freq:900,q:1.2,envMult:3,envTime:0.15},
+                attack:0.004, decay:0.25, sustain:0.2, release:0.18, gain:0.5 },
+  padWarm:    { type:'osc', wave:'sine', voices:2, detune:5,
+                filter:{type:'lowpass',freq:800,q:0.4},
+                attack:0.5, decay:0.5, sustain:0.75, release:0.8, gain:0.18 }
 };
 

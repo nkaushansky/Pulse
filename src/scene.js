@@ -1,6 +1,6 @@
 /* ---------------- three.js scene ---------------- */
 const R = CONFIG.tunnelRadius;
-const SPEED = CONFIG.speed;
+let SPEED = CONFIG.speed;        // per-song override via meta.overrides.speed
 const HIT_Z = CONFIG.hitZ;
 const LANE_X = [-1.6, 0, 1.6];
 const WALL_W = 4.8;
@@ -39,8 +39,7 @@ function initScene(){
   gemMats.miss = new THREE.MeshBasicMaterial({
     color: 0x39394a, transparent:true, opacity:0.35, depthWrite:false });
 
-  buildWalls();
-  buildRings();
+  buildRings();                  // walls are per-song: built by selectSong()
   window.addEventListener('resize', onResize);
 }
 
@@ -52,9 +51,34 @@ function onResize(){
 
 function wallAngle(w){ return w * Math.PI / 4; }
 
-function buildWalls(){
+/* Tear down the current song's walls (depth rings persist). Gem meshes
+   use the shared geometry/materials, which must survive; everything
+   else here was created per-build and is disposed for real. */
+function disposeWalls(){
+  for (const wr of wallRender){
+    if (!wr) continue;
+    wr.group.traverse(o => {
+      if (o.geometry && o.geometry !== gemGeo) o.geometry.dispose();
+      if (o.material && o.material !== gemMats.miss &&
+          gemMats.bright.indexOf(o.material) < 0 &&
+          gemMats.dim.indexOf(o.material) < 0){
+        o.material.dispose();
+      }
+    });
+    tunnelGroup.remove(wr.group);
+  }
+  wallRender.length = 0;
+}
+
+function rebuildWalls(song){
+  if (!tunnelGroup) return;      // boot order guard: scene not up yet
+  disposeWalls();
+  buildWalls(song);
+}
+
+function buildWalls(song){
   const trackByWall = {};
-  for (const tr of SONG.tracks) trackByWall[tr.wall] = tr;
+  for (const tr of song.tracks) trackByWall[tr.wall] = tr;
 
   for (let w = 0; w < WALL_COUNT; w++){
     const grp = new THREE.Group();
@@ -173,10 +197,12 @@ function buildWalls(){
       wr.flashes.push(fl);
     }
 
-    // gem pool + live set live on the track
+    // gem pool + live set live on the track; meshes from a previous
+    // selection of this song died with their wall group — drop the refs
     tr._pool = [];
     tr._live = new Set();
     tr._spawnPtr = 0;
+    for (const gem of tr._gems) gem.mesh = null;
   }
 }
 

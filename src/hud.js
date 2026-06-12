@@ -3,6 +3,7 @@ const ui = {
   hud: document.getElementById('hud'),
   title: document.getElementById('title'),
   pause: document.getElementById('pause'),
+  select: document.getElementById('select'),
   results: document.getElementById('results'),
   score: document.getElementById('score'),
   judge: document.getElementById('judge'),
@@ -92,9 +93,8 @@ function updateRing(){
 }
 
 function buildTitle(){
-  const m = SONG.meta;
   document.getElementById('titlemeta').textContent =
-    m.title + ' \u00b7 ' + m.bpm + ' BPM \u00b7 ' + m.lengthBars + ' BARS \u00b7 ' + m.difficulty;
+    SONGS.length + ' SIGNALS DETECTED';
   const L = CONFIG.inputLabels;
   const rows = [
     ['<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>', 'HIT LANES'],
@@ -106,5 +106,38 @@ function buildTitle(){
   document.getElementById('keyhints').innerHTML =
     '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
     '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+}
+
+/* ---------------- song select (V2 §2) ---------------- */
+let songSel = 0;
+function buildSelect(){
+  const list = document.getElementById('songlist');
+  list.innerHTML = '';
+  SONGS.forEach((song, i) => {
+    const m = song.meta;
+    const row = document.createElement('div');
+    row.className = 'songrow' + (i === songSel ? ' sel' : '');
+    const title = document.createElement('div');
+    title.className = 'st';
+    title.textContent = m.title;
+    title.style.color = '#' + song.tracks[0].color.toString(16).padStart(6, '0');
+    const meta = document.createElement('div');
+    meta.className = 'sm';
+    meta.textContent = m.bpm + ' BPM \u00b7 ' + m.difficulty.toUpperCase() +
+      ' \u00b7 ' + song.tracks.length + ' TRACKS \u00b7 ' + m.lengthBars + ' BARS';
+    const bestLine = document.createElement('div');
+    bestLine.className = 'sb';
+    const best = SAVE.getBest(m.title);
+    bestLine.textContent = best
+      ? 'BEST ' + best.score.toLocaleString() + ' \u00b7 ' + best.grade + ' \u00b7 ' + best.acc + '%'
+      : 'NO RECORD';
+    row.append(title, meta, bestLine);
+    row.addEventListener('click', () => {
+      songSel = i;
+      selectSong(SONGS[i]);
+      startGame();
+    });
+    list.appendChild(row);
+  });
 }
 

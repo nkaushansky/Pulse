@@ -1,15 +1,19 @@
-/* ---------------- song package ----------------
-   Format (per spec):
-     meta: { title, bpm, timeSignature, lengthBars, difficulty }
-     tracks: [{ name, color, synth:"instrumentId" | stemUrl:"...",
+/* ---------------- song packages ----------------
+   Format (the content contract — see CLAUDE.md):
+     meta: { title, bpm, timeSignature, lengthBars,
+             difficulty: 'easy'|'normal'|'hard',
+             overrides?: { speed } }          // world units/sec, else CONFIG.speed
+     tracks: [{ name, color, wall, synth:"instrumentId" | stemUrl:"...",
                 pattern:[{step,note,len,inst?}],   // 16th grid, 2-bar loop
                 chart:[{bar,beat,lane}] }]
    A track is EITHER synth-pattern-driven OR stem-driven.
-   chart here is authored as a 2-bar loop (_chartLoop) and
-   expanded to the canonical [{bar,beat,lane}] form at load. */
-const SONG = {
+   chart is authored as a 2-bar loop (_chartLoop) and expanded to the
+   canonical [{bar,beat,lane}] form by prepareSong(). Adding a song is
+   data only: push a package into SONGS, zero new code paths. */
+const SONGS = [
+{
   meta: { title:'NEON CIRCUIT', bpm:120, timeSignature:[4,4],
-          lengthBars:96, difficulty:'NORMAL' },
+          lengthBars:96, difficulty:'hard' },
   tracks: [
     { name:'DRUMS', color:0xff3b5c, wall:0, synth:'kick909',
       pattern:[
@@ -81,18 +85,65 @@ const SONG = {
         {step:24,lane:0},{step:26,lane:1},{step:28,lane:2}
       ]}
   ]
-};
-const TOTAL_PHRASES = SONG.meta.lengthBars / PHRASE_BARS;
-const TOTAL_STEPS = SONG.meta.lengthBars * STEPS_PER_BAR;
+},
+{
+  meta: { title:'LUNAR DRIFT', bpm:100, timeSignature:[4,4],
+          lengthBars:64, difficulty:'easy',
+          overrides:{ speed:15 } },
+  tracks: [
+    { name:'DRUMS', color:0xff6e8a, wall:0, synth:'kickSoft',
+      pattern:[
+        {step:0, note:36, len:1},{step:8, note:36, len:1},
+        {step:16,note:36, len:1},{step:24,note:36, len:1},
+        {step:4, note:42, len:1, inst:'hatSoft'},
+        {step:12,note:42, len:1, inst:'hatSoft'},
+        {step:20,note:42, len:1, inst:'hatSoft'},
+        {step:28,note:42, len:1, inst:'hatSoft'}
+      ],
+      _chartLoop:[
+        {step:0,lane:1},{step:8,lane:0},{step:12,lane:2},
+        {step:16,lane:1},{step:24,lane:0},{step:28,lane:2}
+      ]},
+    { name:'BASS', color:0x4f8cff, wall:1, synth:'bass808',
+      pattern:[
+        {step:0, note:33, len:7},{step:8, note:29, len:7},
+        {step:16,note:36, len:7},{step:24,note:31, len:7}
+      ],
+      _chartLoop:[
+        {step:0,lane:0},{step:8,lane:1},{step:16,lane:2},{step:24,lane:1}
+      ]},
+    { name:'KEYS', color:0x9a6bff, wall:2, synth:'pluckSoft',
+      pattern:[
+        {step:2, note:64, len:2},{step:6, note:67, len:2},
+        {step:12,note:64, len:3},{step:18,note:62, len:2},
+        {step:22,note:60, len:2},{step:26,note:57, len:4}
+      ],
+      _chartLoop:[
+        {step:2,lane:1},{step:6,lane:2},{step:12,lane:1},
+        {step:18,lane:0},{step:22,lane:1},{step:26,lane:0}
+      ]},
+    { name:'PAD', color:0x2fd4b2, wall:3, synth:'padWarm',
+      pattern:[
+        {step:0, note:45, len:16},{step:0, note:52, len:16},{step:0, note:57, len:16},
+        {step:16,note:41, len:16},{step:16,note:48, len:16},{step:16,note:53, len:16}
+      ],
+      _chartLoop:[ {step:0,lane:1},{step:16,lane:1} ]}
+  ]
+}
+];
+
+let SONG = null;          // selected package; set via selectSong()
 const WALL_COUNT = 8;
 
 function midiFreq(n){ return 440 * Math.pow(2, (n - 69) / 12); }
 
-/* Expand authoring loops into the canonical song format +
-   runtime gem objects. Game code consumes tracks generically:
-   a track with stemUrl skips pattern scheduling (v1 stub). */
-function prepareSong(){
-  for (const tr of SONG.tracks){
+/* Expand authoring loops into the canonical song format + runtime gem
+   objects. Uses song-local tempo so packages can be prepared once,
+   independent of which song is currently selected. */
+function prepareSong(song){
+  const s16 = (60 / song.meta.bpm) / 4;
+  const totalPhrases = song.meta.lengthBars / PHRASE_BARS;
+  for (const tr of song.tracks){
     tr._stepMap = {};
     if (tr.pattern){
       for (const ev of tr.pattern){
@@ -100,7 +151,7 @@ function prepareSong(){
       }
     }
     tr.chart = [];
-    for (let p = 0; p < TOTAL_PHRASES; p++){
+    for (let p = 0; p < totalPhrases; p++){
       for (const c of tr._chartLoop){
         tr.chart.push({ bar: p * 2 + (c.step >> 4), beat: (c.step & 15) / 4, lane: c.lane });
       }
@@ -108,18 +159,18 @@ function prepareSong(){
     // runtime gems
     tr._gems = [];
     tr._byPhrase = [];
-    for (let p = 0; p < TOTAL_PHRASES; p++) tr._byPhrase.push([]);
+    for (let p = 0; p < totalPhrases; p++) tr._byPhrase.push([]);
     for (const c of tr.chart){
       const step = c.bar * STEPS_PER_BAR + Math.round(c.beat * 4);
       const loopStep = step % STEPS_PER_PHRASE;
       const evs = tr._stepMap[loopStep];
       const ev = evs ? evs[Math.min(c.lane, evs.length - 1)] : null;
       const gem = {
-        time: step * S16, step, lane: c.lane,
+        time: step * s16, step, lane: c.lane,
         phrase: Math.floor(c.bar / PHRASE_BARS),
         note: ev ? ev.note : 69,
         inst: ev ? (ev.inst || tr.synth) : tr.synth,
-        lenSec: (ev ? (ev.len || 1) : 1) * S16,
+        lenSec: (ev ? (ev.len || 1) : 1) * s16,
         hit:false, missed:false, mesh:null
       };
       tr._gems.push(gem);
@@ -133,5 +184,28 @@ function prepareSong(){
     for (const g of tr._gems) g._solo = perStep[g.step] > 1;
     tr.capturedUntilPhrase = null;
   }
+  song._prepared = true;
 }
 
+/* Tempo-derived globals follow the selected song (V2 §2). */
+function applySongTiming(song){
+  BPM = song.meta.bpm;
+  SPB = 60 / BPM;
+  SPBAR = SPB * 4;
+  S16 = SPB / 4;
+  PHRASE_SEC = SPBAR * PHRASE_BARS;
+  TOTAL_PHRASES = song.meta.lengthBars / PHRASE_BARS;
+  TOTAL_STEPS = song.meta.lengthBars * STEPS_PER_BAR;
+  SPEED = (song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed;
+}
+
+/* Make a song current: timing globals, per-track audio buses (if the
+   AudioContext exists yet), and the tunnel rebuilt for its walls. */
+function selectSong(song){
+  if (!song._prepared) prepareSong(song);
+  SONG = song;
+  applySongTiming(song);
+  if (audio.ctx) initSongAudio(song);
+  rebuildWalls(song);
+  updateRingIdle();
+}

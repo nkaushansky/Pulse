@@ -63,11 +63,10 @@ function frame(){
 }
 
 /* ---------------- boot ---------------- */
-prepareSong();
 initScene();
 buildRingHud();
 buildTitle();
-updateRingIdle();
+selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){
   for (let w = 0; w < WALL_COUNT; w++){
     const wr = wallRender[w];

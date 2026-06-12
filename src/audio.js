@@ -21,10 +21,17 @@ function initAudio(){
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   audio.ctx = ctx; audio.master = master; audio.hitBus = hitBus;
   audio.noteBus = noteBus; audio.pulseBus = pulseBus; audio.noiseBuf = buf;
-  for (const tr of SONG.tracks){
-    tr._gain = ctx.createGain();
+  if (SONG) initSongAudio(SONG);
+}
+
+/* Per-track buses for a song package; idempotent, called on selection
+   (songs can be selected before the user-gesture AudioContext exists). */
+function initSongAudio(song){
+  for (const tr of song.tracks){
+    if (tr._gain) continue;
+    tr._gain = audio.ctx.createGain();
     tr._gain.gain.value = 0;       // muted until captured
-    tr._gain.connect(master);
+    tr._gain.connect(audio.master);
     tr._skipped = [];              // unscheduled backing events near "now" (see scheduleStep)
   }
 }

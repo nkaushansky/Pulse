@@ -5,18 +5,23 @@
    visuals-only. Lookahead scheduler per "A Tale of Two Clocks".
    ============================================================ */
 
-/* ---------------- timing constants ---------------- */
-const BPM = 120;
-const SPB = 60 / BPM;            // seconds per beat (0.5)
-const SPBAR = SPB * 4;           // seconds per bar (2.0)
-const S16 = SPB / 4;             // seconds per 16th (0.125)
+/* ---------------- timing constants ----------------
+   Grid shape is fixed; tempo-derived values are per-song (V2 §2)
+   and assigned by applySongTiming() when a song is selected. */
 const STEPS_PER_BAR = 16;
 const STEPS_PER_PHRASE = 32;     // phrase = 2 bars
-const PHRASE_SEC = SPBAR * 2;    // 4.0s
 const PHRASE_BARS = 2;
 const CAPTURE_PHRASES = 4;       // 8 bars
 const HIT_WINDOW = 0.090;
 const PERFECT_WINDOW = 0.040;
+
+let BPM = 120;
+let SPB = 60 / BPM;              // seconds per beat
+let SPBAR = SPB * 4;             // seconds per bar
+let S16 = SPB / 4;               // seconds per 16th
+let PHRASE_SEC = SPBAR * PHRASE_BARS;
+let TOTAL_PHRASES = 0;           // set per song
+let TOTAL_STEPS = 0;
 
 const CONFIG = {
   speed: 18,            // world units per second of song time

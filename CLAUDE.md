@@ -54,12 +54,16 @@ plane** (`y = -R + 0.4`, `z = hitZ`), not painted on the wall floor, so
 "gem centered in circle" is literally the hit moment (no parallax).
 
 ### 4. The SONG package format is the content contract
-All playable content is a SONG package (see `src/song.js`). New songs are
-data only — adding one must require zero new code paths.
+All playable content is a SONG package in the `SONGS` array
+(`src/song.js`). New songs are data only — adding one must require zero
+new code paths: `selectSong()` handles timing globals, per-track audio
+buses, and the tunnel rebuild.
 
 ```js
 {
-  meta: { title, bpm, timeSignature, lengthBars, difficulty },
+  meta: { title, bpm, timeSignature, lengthBars,
+          difficulty: 'easy'|'normal'|'hard',   // displayed enum
+          overrides?: { speed } },              // world units/sec; else CONFIG.speed
   tracks: [{
     name, color, wall,
     synth: "instrumentId"  /* OR */  stemUrl: "...",   // exactly one
@@ -80,10 +84,12 @@ data only — adding one must require zero new code paths.
   by the single generic `playVoice()` — new sounds are new registry
   entries, not new code paths.
 
-V2 (§2 of the spec) extends `meta`: `difficulty` becomes the displayed
-enum `easy | normal | hard`, and per-song overrides (starting with
-`speed`) live in an optional `meta.overrides` object. Update this section
-when that lands.
+Tempo-derived globals (`SPB`, `S16`, `PHRASE_SEC`, `TOTAL_PHRASES`,
+`TOTAL_STEPS`, `SPEED`) follow the selected song via `applySongTiming()`;
+nothing may cache them across song selection. Per-song save data is
+keyed by `meta.title`. Grade capture thresholds scale with
+`TOTAL_PHRASES` (ratios preserve V1's values for the 48-phrase NEON
+CIRCUIT). New `meta.overrides` keys may be added only via that object.
 
 ## Persistence (V2 §5)
 

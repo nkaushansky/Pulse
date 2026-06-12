@@ -131,6 +131,21 @@
   #topscores span{color:var(--dim)}
   #topscores span.cur{color:#fff;text-shadow:0 0 10px rgba(160,220,255,.9)}
   #pause .gametitle{font-size:clamp(30px,6vw,60px)}
+
+  /* ---------- song select ---------- */
+  .selecttitle{font-size:clamp(26px,5vw,52px)}
+  #songlist{margin-top:30px;display:flex;flex-direction:column;gap:14px;
+    width:min(92vw,560px)}
+  .songrow{border:1px solid rgba(120,160,255,.25);padding:14px 18px;
+    text-align:left;cursor:pointer;background:rgba(10,16,40,.35)}
+  .songrow.sel{border-color:#fff;background:rgba(30,50,100,.45);
+    box-shadow:0 0 18px rgba(120,200,255,.35)}
+  .songrow .st{font-size:clamp(15px,2.2vw,20px);letter-spacing:.25em;color:#fff;
+    text-shadow:0 0 10px currentColor}
+  .songrow .sm{margin-top:6px;font-size:clamp(10px,1.3vw,12px);
+    letter-spacing:.18em;color:var(--dim)}
+  .songrow .sb{margin-top:4px;font-size:clamp(10px,1.3vw,12px);
+    letter-spacing:.18em;color:var(--lane2)}
 </style>
 </head>
 <body>
@@ -163,6 +178,12 @@
   <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
 </div>
 
+<div id="select" class="overlay hidden">
+  <div class="gametitle selecttitle">SELECT SIGNAL</div>
+  <div id="songlist"></div>
+  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; ESC BACK</div>
+</div>
+
 <div id="pause" class="overlay hidden">
   <div class="gametitle">PAUSED</div>
   <div class="startprompt">PRESS ESC TO RESUME</div>
@@ -180,7 +201,7 @@
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
   <div id="topscores"></div>
-  <div class="startprompt" style="margin-top:30px">PRESS R TO RETRY</div>
+  <div class="startprompt" style="margin-top:30px">R RETRY &middot; S SONG SELECT</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -192,18 +213,23 @@
    visuals-only. Lookahead scheduler per "A Tale of Two Clocks".
    ============================================================ */
 
-/* ---------------- timing constants ---------------- */
-const BPM = 120;
-const SPB = 60 / BPM;            // seconds per beat (0.5)
-const SPBAR = SPB * 4;           // seconds per bar (2.0)
-const S16 = SPB / 4;             // seconds per 16th (0.125)
+/* ---------------- timing constants ----------------
+   Grid shape is fixed; tempo-derived values are per-song (V2 §2)
+   and assigned by applySongTiming() when a song is selected. */
 const STEPS_PER_BAR = 16;
 const STEPS_PER_PHRASE = 32;     // phrase = 2 bars
-const PHRASE_SEC = SPBAR * 2;    // 4.0s
 const PHRASE_BARS = 2;
 const CAPTURE_PHRASES = 4;       // 8 bars
 const HIT_WINDOW = 0.090;
 const PERFECT_WINDOW = 0.040;
+
+let BPM = 120;
+let SPB = 60 / BPM;              // seconds per beat
+let SPBAR = SPB * 4;             // seconds per bar
+let S16 = SPB / 4;               // seconds per 16th
+let PHRASE_SEC = SPBAR * PHRASE_BARS;
+let TOTAL_PHRASES = 0;           // set per song
+let TOTAL_STEPS = 0;
 
 const CONFIG = {
   speed: 18,            // world units per second of song time
@@ -343,21 +369,36 @@ const INSTRUMENTS = {
   tickHi:     { type:'osc', wave:'square', filter:{type:'lowpass',freq:6000,q:0.7},
                 attack:0.001, decay:0.07, sustain:0, gain:0.5 },
   pulseTick:  { type:'noise', filter:{type:'highpass',freq:9500,q:0.7},
-                attack:0.0005, decay:0.018, sustain:0, gain:0.9 }
+                attack:0.0005, decay:0.018, sustain:0, gain:0.9 },
+  // gentler palette for the easy song (V2 §2)
+  kickSoft:   { type:'osc', wave:'sine', pitchEnv:{start:120,end:40,time:0.12},
+                attack:0.004, decay:0.30, sustain:0, gain:0.85 },
+  hatSoft:    { type:'noise', filter:{type:'highpass',freq:9000,q:0.6},
+                attack:0.002, decay:0.06, sustain:0, gain:0.22 },
+  pluckSoft:  { type:'osc', wave:'triangle', voices:2, detune:6,
+                filter:{type:'lowpass',freq:900,q:1.2,envMult:3,envTime:0.15},
+                attack:0.004, decay:0.25, sustain:0.2, release:0.18, gain:0.5 },
+  padWarm:    { type:'osc', wave:'sine', voices:2, detune:5,
+                filter:{type:'lowpass',freq:800,q:0.4},
+                attack:0.5, decay:0.5, sustain:0.75, release:0.8, gain:0.18 }
 };
 
-/* ---------------- song package ----------------
-   Format (per spec):
-     meta: { title, bpm, timeSignature, lengthBars, difficulty }
-     tracks: [{ name, color, synth:"instrumentId" | stemUrl:"...",
+/* ---------------- song packages ----------------
+   Format (the content contract — see CLAUDE.md):
+     meta: { title, bpm, timeSignature, lengthBars,
+             difficulty: 'easy'|'normal'|'hard',
+             overrides?: { speed } }          // world units/sec, else CONFIG.speed
+     tracks: [{ name, color, wall, synth:"instrumentId" | stemUrl:"...",
                 pattern:[{step,note,len,inst?}],   // 16th grid, 2-bar loop
                 chart:[{bar,beat,lane}] }]
    A track is EITHER synth-pattern-driven OR stem-driven.
-   chart here is authored as a 2-bar loop (_chartLoop) and
-   expanded to the canonical [{bar,beat,lane}] form at load. */
-const SONG = {
+   chart is authored as a 2-bar loop (_chartLoop) and expanded to the
+   canonical [{bar,beat,lane}] form by prepareSong(). Adding a song is
+   data only: push a package into SONGS, zero new code paths. */
+const SONGS = [
+{
   meta: { title:'NEON CIRCUIT', bpm:120, timeSignature:[4,4],
-          lengthBars:96, difficulty:'NORMAL' },
+          lengthBars:96, difficulty:'hard' },
   tracks: [
     { name:'DRUMS', color:0xff3b5c, wall:0, synth:'kick909',
       pattern:[
@@ -429,18 +470,65 @@ const SONG = {
         {step:24,lane:0},{step:26,lane:1},{step:28,lane:2}
       ]}
   ]
-};
-const TOTAL_PHRASES = SONG.meta.lengthBars / PHRASE_BARS;
-const TOTAL_STEPS = SONG.meta.lengthBars * STEPS_PER_BAR;
+},
+{
+  meta: { title:'LUNAR DRIFT', bpm:100, timeSignature:[4,4],
+          lengthBars:64, difficulty:'easy',
+          overrides:{ speed:15 } },
+  tracks: [
+    { name:'DRUMS', color:0xff6e8a, wall:0, synth:'kickSoft',
+      pattern:[
+        {step:0, note:36, len:1},{step:8, note:36, len:1},
+        {step:16,note:36, len:1},{step:24,note:36, len:1},
+        {step:4, note:42, len:1, inst:'hatSoft'},
+        {step:12,note:42, len:1, inst:'hatSoft'},
+        {step:20,note:42, len:1, inst:'hatSoft'},
+        {step:28,note:42, len:1, inst:'hatSoft'}
+      ],
+      _chartLoop:[
+        {step:0,lane:1},{step:8,lane:0},{step:12,lane:2},
+        {step:16,lane:1},{step:24,lane:0},{step:28,lane:2}
+      ]},
+    { name:'BASS', color:0x4f8cff, wall:1, synth:'bass808',
+      pattern:[
+        {step:0, note:33, len:7},{step:8, note:29, len:7},
+        {step:16,note:36, len:7},{step:24,note:31, len:7}
+      ],
+      _chartLoop:[
+        {step:0,lane:0},{step:8,lane:1},{step:16,lane:2},{step:24,lane:1}
+      ]},
+    { name:'KEYS', color:0x9a6bff, wall:2, synth:'pluckSoft',
+      pattern:[
+        {step:2, note:64, len:2},{step:6, note:67, len:2},
+        {step:12,note:64, len:3},{step:18,note:62, len:2},
+        {step:22,note:60, len:2},{step:26,note:57, len:4}
+      ],
+      _chartLoop:[
+        {step:2,lane:1},{step:6,lane:2},{step:12,lane:1},
+        {step:18,lane:0},{step:22,lane:1},{step:26,lane:0}
+      ]},
+    { name:'PAD', color:0x2fd4b2, wall:3, synth:'padWarm',
+      pattern:[
+        {step:0, note:45, len:16},{step:0, note:52, len:16},{step:0, note:57, len:16},
+        {step:16,note:41, len:16},{step:16,note:48, len:16},{step:16,note:53, len:16}
+      ],
+      _chartLoop:[ {step:0,lane:1},{step:16,lane:1} ]}
+  ]
+}
+];
+
+let SONG = null;          // selected package; set via selectSong()
 const WALL_COUNT = 8;
 
 function midiFreq(n){ return 440 * Math.pow(2, (n - 69) / 12); }
 
-/* Expand authoring loops into the canonical song format +
-   runtime gem objects. Game code consumes tracks generically:
-   a track with stemUrl skips pattern scheduling (v1 stub). */
-function prepareSong(){
-  for (const tr of SONG.tracks){
+/* Expand authoring loops into the canonical song format + runtime gem
+   objects. Uses song-local tempo so packages can be prepared once,
+   independent of which song is currently selected. */
+function prepareSong(song){
+  const s16 = (60 / song.meta.bpm) / 4;
+  const totalPhrases = song.meta.lengthBars / PHRASE_BARS;
+  for (const tr of song.tracks){
     tr._stepMap = {};
     if (tr.pattern){
       for (const ev of tr.pattern){
@@ -448,7 +536,7 @@ function prepareSong(){
       }
     }
     tr.chart = [];
-    for (let p = 0; p < TOTAL_PHRASES; p++){
+    for (let p = 0; p < totalPhrases; p++){
       for (const c of tr._chartLoop){
         tr.chart.push({ bar: p * 2 + (c.step >> 4), beat: (c.step & 15) / 4, lane: c.lane });
       }
@@ -456,18 +544,18 @@ function prepareSong(){
     // runtime gems
     tr._gems = [];
     tr._byPhrase = [];
-    for (let p = 0; p < TOTAL_PHRASES; p++) tr._byPhrase.push([]);
+    for (let p = 0; p < totalPhrases; p++) tr._byPhrase.push([]);
     for (const c of tr.chart){
       const step = c.bar * STEPS_PER_BAR + Math.round(c.beat * 4);
       const loopStep = step % STEPS_PER_PHRASE;
       const evs = tr._stepMap[loopStep];
       const ev = evs ? evs[Math.min(c.lane, evs.length - 1)] : null;
       const gem = {
-        time: step * S16, step, lane: c.lane,
+        time: step * s16, step, lane: c.lane,
         phrase: Math.floor(c.bar / PHRASE_BARS),
         note: ev ? ev.note : 69,
         inst: ev ? (ev.inst || tr.synth) : tr.synth,
-        lenSec: (ev ? (ev.len || 1) : 1) * S16,
+        lenSec: (ev ? (ev.len || 1) : 1) * s16,
         hit:false, missed:false, mesh:null
       };
       tr._gems.push(gem);
@@ -481,8 +569,31 @@ function prepareSong(){
     for (const g of tr._gems) g._solo = perStep[g.step] > 1;
     tr.capturedUntilPhrase = null;
   }
+  song._prepared = true;
 }
 
+/* Tempo-derived globals follow the selected song (V2 §2). */
+function applySongTiming(song){
+  BPM = song.meta.bpm;
+  SPB = 60 / BPM;
+  SPBAR = SPB * 4;
+  S16 = SPB / 4;
+  PHRASE_SEC = SPBAR * PHRASE_BARS;
+  TOTAL_PHRASES = song.meta.lengthBars / PHRASE_BARS;
+  TOTAL_STEPS = song.meta.lengthBars * STEPS_PER_BAR;
+  SPEED = (song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed;
+}
+
+/* Make a song current: timing globals, per-track audio buses (if the
+   AudioContext exists yet), and the tunnel rebuilt for its walls. */
+function selectSong(song){
+  if (!song._prepared) prepareSong(song);
+  SONG = song;
+  applySongTiming(song);
+  if (audio.ctx) initSongAudio(song);
+  rebuildWalls(song);
+  updateRingIdle();
+}
 /* ---------------- audio engine ---------------- */
 const audio = { ctx:null, master:null, hitBus:null, noteBus:null, pulseBus:null, noiseBuf:null };
 
@@ -506,10 +617,17 @@ function initAudio(){
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   audio.ctx = ctx; audio.master = master; audio.hitBus = hitBus;
   audio.noteBus = noteBus; audio.pulseBus = pulseBus; audio.noiseBuf = buf;
-  for (const tr of SONG.tracks){
-    tr._gain = ctx.createGain();
+  if (SONG) initSongAudio(SONG);
+}
+
+/* Per-track buses for a song package; idempotent, called on selection
+   (songs can be selected before the user-gesture AudioContext exists). */
+function initSongAudio(song){
+  for (const tr of song.tracks){
+    if (tr._gain) continue;
+    tr._gain = audio.ctx.createGain();
     tr._gain.gain.value = 0;       // muted until captured
-    tr._gain.connect(master);
+    tr._gain.connect(audio.master);
     tr._skipped = [];              // unscheduled backing events near "now" (see scheduleStep)
   }
 }
@@ -661,7 +779,7 @@ function flushSkippedEvents(tr){
 
 /* ---------------- three.js scene ---------------- */
 const R = CONFIG.tunnelRadius;
-const SPEED = CONFIG.speed;
+let SPEED = CONFIG.speed;        // per-song override via meta.overrides.speed
 const HIT_Z = CONFIG.hitZ;
 const LANE_X = [-1.6, 0, 1.6];
 const WALL_W = 4.8;
@@ -700,8 +818,7 @@ function initScene(){
   gemMats.miss = new THREE.MeshBasicMaterial({
     color: 0x39394a, transparent:true, opacity:0.35, depthWrite:false });
 
-  buildWalls();
-  buildRings();
+  buildRings();                  // walls are per-song: built by selectSong()
   window.addEventListener('resize', onResize);
 }
 
@@ -713,9 +830,34 @@ function onResize(){
 
 function wallAngle(w){ return w * Math.PI / 4; }
 
-function buildWalls(){
+/* Tear down the current song's walls (depth rings persist). Gem meshes
+   use the shared geometry/materials, which must survive; everything
+   else here was created per-build and is disposed for real. */
+function disposeWalls(){
+  for (const wr of wallRender){
+    if (!wr) continue;
+    wr.group.traverse(o => {
+      if (o.geometry && o.geometry !== gemGeo) o.geometry.dispose();
+      if (o.material && o.material !== gemMats.miss &&
+          gemMats.bright.indexOf(o.material) < 0 &&
+          gemMats.dim.indexOf(o.material) < 0){
+        o.material.dispose();
+      }
+    });
+    tunnelGroup.remove(wr.group);
+  }
+  wallRender.length = 0;
+}
+
+function rebuildWalls(song){
+  if (!tunnelGroup) return;      // boot order guard: scene not up yet
+  disposeWalls();
+  buildWalls(song);
+}
+
+function buildWalls(song){
   const trackByWall = {};
-  for (const tr of SONG.tracks) trackByWall[tr.wall] = tr;
+  for (const tr of song.tracks) trackByWall[tr.wall] = tr;
 
   for (let w = 0; w < WALL_COUNT; w++){
     const grp = new THREE.Group();
@@ -834,10 +976,12 @@ function buildWalls(){
       wr.flashes.push(fl);
     }
 
-    // gem pool + live set live on the track
+    // gem pool + live set live on the track; meshes from a previous
+    // selection of this song died with their wall group — drop the refs
     tr._pool = [];
     tr._live = new Set();
     tr._spawnPtr = 0;
+    for (const gem of tr._gems) gem.mesh = null;
   }
 }
 
@@ -1211,12 +1355,15 @@ function finish(kind){
   }
   const judged = G.hits + G.misses;
   const acc = judged ? Math.round(100 * G.hits / judged) : 0;
+  // capture thresholds scale with song length; ratios chosen so the
+  // 48-phrase NEON CIRCUIT keeps its V1 values (30/22/14/7)
+  const capsFor = (per48) => Math.round(TOTAL_PHRASES * per48 / 48);
   let grade = 'D';
   if (kind === 'fail') grade = 'F';
-  else if (G.captures >= 30 && acc >= 95) grade = 'S';
-  else if (G.captures >= 22 && acc >= 88) grade = 'A';
-  else if (G.captures >= 14 && acc >= 75) grade = 'B';
-  else if (G.captures >= 7) grade = 'C';
+  else if (G.captures >= capsFor(30) && acc >= 95) grade = 'S';
+  else if (G.captures >= capsFor(22) && acc >= 88) grade = 'A';
+  else if (G.captures >= capsFor(14) && acc >= 75) grade = 'B';
+  else if (G.captures >= capsFor(7)) grade = 'C';
   ui.results.classList.toggle('fail', kind === 'fail');
   document.getElementById('grade').textContent = grade;
   document.getElementById('verdict').textContent = kind === 'fail' ? 'SIGNAL LOST' : 'SIGNAL CLEAR';
@@ -1259,24 +1406,55 @@ const INPUT = {
   }
 };
 
-let appState = 'title'; // title | running | over
+let appState = 'title'; // title | select | running | over
 window.addEventListener('keydown', (e) => {
   if (['ArrowLeft','ArrowDown','ArrowRight','ArrowUp','Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
-  if (appState === 'title'){ startGame(); return; }
+  if (appState === 'title'){ enterSelect(); return; }
+  if (appState === 'select'){
+    if (e.code === 'ArrowUp') moveSongSel(-1);
+    else if (e.code === 'ArrowDown') moveSongSel(1);
+    else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') startGame();
+    else if (e.code === 'Escape') backToTitle();
+    return;
+  }
   if (appState === 'over' || (G && G.state === 'over')){
     if (e.code === 'KeyR'){ newGame(); appState = 'running'; }
+    else if (e.code === 'KeyS') enterSelect();
     return;
   }
   const action = CONFIG.keymap[e.code];
   if (action) INPUT.emit(action);
 });
 document.getElementById('title').addEventListener('click', () => {
-  if (appState === 'title') startGame();
+  if (appState === 'title') enterSelect();
 });
 document.getElementById('results').addEventListener('click', () => {
   if (G && G.state === 'over'){ newGame(); appState = 'running'; }
 });
+
+function enterSelect(){
+  appState = 'select';
+  G = null;                        // frame() falls back to the idle tunnel spin
+  ui.hud.classList.add('hidden');
+  ui.title.classList.add('hidden');
+  ui.results.classList.add('hidden');
+  buildSelect();
+  ui.select.classList.remove('hidden');
+}
+
+function backToTitle(){
+  appState = 'title';
+  ui.select.classList.add('hidden');
+  ui.title.classList.remove('hidden');
+}
+
+function moveSongSel(dir){
+  const n = SONGS.length;
+  songSel = (songSel + dir + n) % n;
+  selectSong(SONGS[songSel]);      // live backdrop: tunnel rebuilds to the highlighted song
+  buildSelect();
+}
 
 function togglePause(){
   if (!G || G.state === 'over') return;
@@ -1296,7 +1474,9 @@ document.addEventListener('visibilitychange', () => {
 
 function startGame(){
   appState = 'running';
-  if (!audio.ctx) initAudio();
+  ui.select.classList.add('hidden');
+  if (!audio.ctx) initAudio();     // first user gesture lands here
+  initSongAudio(SONG);
   audio.ctx.resume().then(() => {
     if (!schedTimer) schedTimer = setInterval(schedulerTick, 25);
     newGame();
@@ -1308,6 +1488,7 @@ const ui = {
   hud: document.getElementById('hud'),
   title: document.getElementById('title'),
   pause: document.getElementById('pause'),
+  select: document.getElementById('select'),
   results: document.getElementById('results'),
   score: document.getElementById('score'),
   judge: document.getElementById('judge'),
@@ -1397,9 +1578,8 @@ function updateRing(){
 }
 
 function buildTitle(){
-  const m = SONG.meta;
   document.getElementById('titlemeta').textContent =
-    m.title + ' \u00b7 ' + m.bpm + ' BPM \u00b7 ' + m.lengthBars + ' BARS \u00b7 ' + m.difficulty;
+    SONGS.length + ' SIGNALS DETECTED';
   const L = CONFIG.inputLabels;
   const rows = [
     ['<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>', 'HIT LANES'],
@@ -1411,6 +1591,39 @@ function buildTitle(){
   document.getElementById('keyhints').innerHTML =
     '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
     '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+}
+
+/* ---------------- song select (V2 §2) ---------------- */
+let songSel = 0;
+function buildSelect(){
+  const list = document.getElementById('songlist');
+  list.innerHTML = '';
+  SONGS.forEach((song, i) => {
+    const m = song.meta;
+    const row = document.createElement('div');
+    row.className = 'songrow' + (i === songSel ? ' sel' : '');
+    const title = document.createElement('div');
+    title.className = 'st';
+    title.textContent = m.title;
+    title.style.color = '#' + song.tracks[0].color.toString(16).padStart(6, '0');
+    const meta = document.createElement('div');
+    meta.className = 'sm';
+    meta.textContent = m.bpm + ' BPM \u00b7 ' + m.difficulty.toUpperCase() +
+      ' \u00b7 ' + song.tracks.length + ' TRACKS \u00b7 ' + m.lengthBars + ' BARS';
+    const bestLine = document.createElement('div');
+    bestLine.className = 'sb';
+    const best = SAVE.getBest(m.title);
+    bestLine.textContent = best
+      ? 'BEST ' + best.score.toLocaleString() + ' \u00b7 ' + best.grade + ' \u00b7 ' + best.acc + '%'
+      : 'NO RECORD';
+    row.append(title, meta, bestLine);
+    row.addEventListener('click', () => {
+      songSel = i;
+      selectSong(SONGS[i]);
+      startGame();
+    });
+    list.appendChild(row);
+  });
 }
 
 /* ---------------- main loop (visuals only) ---------------- */
@@ -1478,11 +1691,10 @@ function frame(){
 }
 
 /* ---------------- boot ---------------- */
-prepareSong();
 initScene();
 buildRingHud();
 buildTitle();
-updateRingIdle();
+selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){
   for (let w = 0; w < WALL_COUNT; w++){
     const wr = wallRender[w];
