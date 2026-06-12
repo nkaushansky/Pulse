@@ -17,6 +17,7 @@ const OUT = path.join(__dirname, 'dist', 'pulse.html');
 
 const MODULES = [
   'config.js',      // timing constants, CONFIG (keymap, inputLabels), lane colors
+  'save.js',        // persistence: versioned localStorage blob (bests, settings)
   'instruments.js', // INSTRUMENTS synth-patch registry
   'song.js',        // SONG package + prepareSong() chart expansion
   'audio.js',       // audio graph, playVoice, stem stub, lookahead scheduler

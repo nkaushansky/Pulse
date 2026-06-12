@@ -219,6 +219,9 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
+  const best = SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc });
+  document.getElementById('r-best').textContent =
+    best.score.toLocaleString() + (best.isNew ? ' \u00b7 NEW' : '');
   ui.results.classList.remove('hidden');
 }
 

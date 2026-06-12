@@ -167,6 +167,7 @@
   <div class="verdict" id="verdict">SIGNAL CLEAR</div>
   <div class="stats">
     <span>SCORE</span><span class="v" id="r-score">0</span>
+    <span>BEST SCORE</span><span class="v" id="r-best">0</span>
     <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
     <span>ACCURACY</span><span class="v" id="r-acc">0%</span>
     <span>CAPTURES</span><span class="v" id="r-caps">0</span>
@@ -223,6 +224,67 @@ const CONFIG = {
 
 const LANE_COLORS = [0x33eeff, 0xff44dd, 0xffcc33];
 
+/* ---------------- persistence (V2 §5) ----------------
+   One versioned localStorage key, managed only by this module.
+   Storage may be unavailable (private browsing) or the blob corrupt:
+   SAVE never throws past this file and the game stays fully playable
+   with session-only state. Blob contents: per-song bests + settings,
+   nothing else. */
+const SAVE_KEY = 'pulse.save.v1';
+
+const SAVE = (() => {
+  const blank = () => ({ version:1, songs:{}, settings:{} });
+
+  let store = null;
+  try {
+    const probe = SAVE_KEY + '.probe';
+    window.localStorage.setItem(probe, '1');
+    window.localStorage.removeItem(probe);
+    store = window.localStorage;
+  } catch (e){ store = null; }
+
+  let data = blank();
+  if (store){
+    try {
+      const parsed = JSON.parse(store.getItem(SAVE_KEY));
+      if (parsed && parsed.version === 1 &&
+          parsed.songs && typeof parsed.songs === 'object' &&
+          parsed.settings && typeof parsed.settings === 'object'){
+        data = parsed;
+      }
+    } catch (e){ /* corrupt blob: start fresh */ }
+  }
+
+  function write(){
+    if (!store) return;
+    try { store.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e){}
+  }
+
+  return {
+    persistent: !!store,
+    /* run: {score, grade, acc}; keeps the highest-scoring run per song.
+       Returns the stored best plus isNew for "fresh record" feedback. */
+    recordResult(songId, run){
+      const prev = data.songs[songId];
+      const isNew = !prev || run.score > prev.score;
+      if (isNew){
+        data.songs[songId] = { score:run.score, grade:run.grade, acc:run.acc };
+        write();
+      }
+      const best = data.songs[songId];
+      return { score:best.score, grade:best.grade, acc:best.acc, isNew };
+    },
+    getBest(songId){ return data.songs[songId] || null; },
+    getSetting(name, fallback){
+      return Object.prototype.hasOwnProperty.call(data.settings, name)
+        ? data.settings[name] : fallback;
+    },
+    setSetting(name, value){
+      data.settings[name] = value;
+      write();
+    }
+  };
+})();
 /* ---------------- instrument registry ----------------
    Each entry is a descriptor interpreted by ONE generic
    voice function (playVoice). Tracks reference these by id;
@@ -1143,6 +1205,9 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
+  const best = SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc });
+  document.getElementById('r-best').textContent =
+    best.score.toLocaleString() + (best.isNew ? ' \u00b7 NEW' : '');
   ui.results.classList.remove('hidden');
 }
 

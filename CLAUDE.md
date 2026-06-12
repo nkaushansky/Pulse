@@ -85,6 +85,17 @@ enum `easy | normal | hard`, and per-song overrides (starting with
 `speed`) live in an optional `meta.overrides` object. Update this section
 when that lands.
 
+## Persistence (V2 §5)
+
+One versioned localStorage key, `pulse.save.v1`, owned exclusively by
+`src/save.js` (`SAVE`). Contents: per-song bests keyed by song title
+(`{score, grade, acc}`, highest score wins) and a flat `settings` object
+(`SAVE.getSetting`/`setSetting` — calibration offset, difficulty options,
+etc. land here in later sections). Nothing else goes in the blob.
+`SAVE` must never throw past its module: storage unavailable (private
+browsing) or a corrupt/missing blob degrades to session-only state and
+must never break boot. No other module touches localStorage.
+
 ## Audio routing (V2 §1 — per-hit note audio)
 
 A gem hit on an uncaptured track performs the track's **actual pattern
