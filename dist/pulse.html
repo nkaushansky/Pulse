@@ -146,6 +146,23 @@
     letter-spacing:.18em;color:var(--dim)}
   .songrow .sb{margin-top:4px;font-size:clamp(10px,1.3vw,12px);
     letter-spacing:.18em;color:var(--lane2)}
+
+  /* ---------- options ---------- */
+  #optlist{margin-top:30px;display:flex;flex-direction:column;gap:14px;
+    width:min(92vw,560px)}
+  .optrow{border:1px solid rgba(120,160,255,.25);padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:center;gap:18px;
+    background:rgba(10,16,40,.35)}
+  .optrow.sel{border-color:#fff;background:rgba(30,50,100,.45);
+    box-shadow:0 0 18px rgba(120,200,255,.35)}
+  .optrow .on{font-size:clamp(12px,1.7vw,16px);letter-spacing:.22em;color:#fff}
+  .optrow .ov{display:flex;gap:16px;font-size:clamp(10px,1.4vw,13px);
+    letter-spacing:.15em;color:var(--dim);text-align:right}
+  .optrow .ov span{cursor:pointer}
+  .optrow .ov span.cur{color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.7)}
+
+  #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
+    letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
 </style>
 </head>
 <body>
@@ -181,7 +198,14 @@
 <div id="select" class="overlay hidden">
   <div class="gametitle selecttitle">SELECT SIGNAL</div>
   <div id="songlist"></div>
-  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; ESC BACK</div>
+  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+</div>
+
+<div id="settings" class="overlay hidden">
+  <div class="gametitle selecttitle">OPTIONS</div>
+  <div id="optlist"></div>
+  <div class="footnote">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+    NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
 </div>
 
 <div id="pause" class="overlay hidden">
@@ -192,6 +216,7 @@
 <div id="results" class="overlay hidden">
   <div class="grade" id="grade">A</div>
   <div class="verdict" id="verdict">SIGNAL CLEAR</div>
+  <div id="r-mods" class="hidden"></div>
   <div class="stats">
     <span>SCORE</span><span class="v" id="r-score">0</span>
     <span>GEMS HIT</span><span class="v" id="r-hits">0</span>
@@ -220,8 +245,18 @@ const STEPS_PER_BAR = 16;
 const STEPS_PER_PHRASE = 32;     // phrase = 2 bars
 const PHRASE_BARS = 2;
 const CAPTURE_PHRASES = 4;       // 8 bars
-const HIT_WINDOW = 0.090;
-const PERFECT_WINDOW = 0.040;
+
+/* Judgment windows are settings-scaled (V2 §6); defaults are V1's
+   values exactly. Assigned by applySettings(). */
+let HIT_WINDOW = 0.090;
+let PERFECT_WINDOW = 0.040;
+const WINDOW_PRESETS = { strict:0.070, normal:0.090, relaxed:0.120 };
+
+function applySettings(){
+  const wm = SAVE.getSetting('windowMode', 'normal');
+  HIT_WINDOW = WINDOW_PRESETS[wm] || WINDOW_PRESETS.normal;
+  PERFECT_WINDOW = 0.040 * (HIT_WINDOW / 0.090);   // scales proportionally
+}
 
 let BPM = 120;
 let SPB = 60 / BPM;              // seconds per beat
@@ -581,7 +616,10 @@ function applySongTiming(song){
   PHRASE_SEC = SPBAR * PHRASE_BARS;
   TOTAL_PHRASES = song.meta.lengthBars / PHRASE_BARS;
   TOTAL_STEPS = song.meta.lengthBars * STEPS_PER_BAR;
-  SPEED = (song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed;
+  // §6 speed multiplier scales tunnel speed (and with it the world-space
+  // spawn distance) — never audio
+  SPEED = ((song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed)
+          * SAVE.getSetting('speedMult', 1);
 }
 
 /* Make a song current: timing globals, per-track audio buses (if the
@@ -1310,8 +1348,12 @@ function onLaneInput(lane){
       if (a.hits >= a.total) captureTrack(tr, p);
     }
   } else if (a.active && !a.broken){
-    pressFeedback(lane, 'miss');
-    breakPhrase(); // empty press — Frequency-strict
+    if (SAVE.getSetting('lenient', false)){
+      pressFeedback(lane, 'dead');   // §6 lenient mode: empty press is harmless
+    } else {
+      pressFeedback(lane, 'miss');
+      breakPhrase(); // empty press — Frequency-strict (the default)
+    }
   } else {
     pressFeedback(lane, 'dead');     // empty press in an already-dead phrase
   }
@@ -1373,7 +1415,18 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
-  renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
+  // §6: runs with modified settings are tagged and never enter the
+  // saved bests — default-settings records can't be displaced by them
+  const mods = settingsModifiers();
+  const modsEl = document.getElementById('r-mods');
+  if (mods.length){
+    modsEl.textContent = mods.join(' \u00b7 ') + ' \u2014 NOT RANKED';
+    modsEl.classList.remove('hidden');
+    renderTopScores({ scores: SAVE.getScores(SONG.meta.title), rank:-1 });
+  } else {
+    modsEl.classList.add('hidden');
+    renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
+  }
   ui.results.classList.remove('hidden');
 }
 
@@ -1415,7 +1468,16 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowUp') moveSongSel(-1);
     else if (e.code === 'ArrowDown') moveSongSel(1);
     else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') startGame();
+    else if (e.code === 'KeyO') enterSettings();
     else if (e.code === 'Escape') backToTitle();
+    return;
+  }
+  if (appState === 'settings'){
+    if (e.code === 'ArrowUp') moveOptSel(-1);
+    else if (e.code === 'ArrowDown') moveOptSel(1);
+    else if (e.code === 'ArrowLeft') changeOpt(-1);
+    else if (e.code === 'ArrowRight') changeOpt(1);
+    else if (e.code === 'Escape' || e.code === 'KeyO' || e.code === 'Enter') enterSelect();
     return;
   }
   if (appState === 'over' || (G && G.state === 'over')){
@@ -1439,8 +1501,16 @@ function enterSelect(){
   ui.hud.classList.add('hidden');
   ui.title.classList.add('hidden');
   ui.results.classList.add('hidden');
+  ui.settings.classList.add('hidden');
   buildSelect();
   ui.select.classList.remove('hidden');
+}
+
+function enterSettings(){
+  appState = 'settings';
+  ui.select.classList.add('hidden');
+  buildSettings();
+  ui.settings.classList.remove('hidden');
 }
 
 function backToTitle(){
@@ -1489,6 +1559,7 @@ const ui = {
   title: document.getElementById('title'),
   pause: document.getElementById('pause'),
   select: document.getElementById('select'),
+  settings: document.getElementById('settings'),
   results: document.getElementById('results'),
   score: document.getElementById('score'),
   judge: document.getElementById('judge'),
@@ -1626,6 +1697,72 @@ function buildSelect(){
   });
 }
 
+
+/* ---------------- options / difficulty settings (V2 §6) ---------------- */
+const OPTIONS = [
+  { key:'speedMult', name:'TUNNEL SPEED', values:[0.75, 1, 1.25], def:1,
+    fmt:v => v + '\u00d7', mod:v => v + '\u00d7 SPEED' },
+  { key:'windowMode', name:'HIT WINDOW', values:['strict','normal','relaxed'], def:'normal',
+    fmt:v => ({ strict:'STRICT \u00b170', normal:'NORMAL \u00b190', relaxed:'RELAXED \u00b1120' })[v],
+    mod:v => v.toUpperCase() },
+  { key:'lenient', name:'LENIENT MODE', values:[false, true], def:false,
+    fmt:v => v ? 'ON' : 'OFF', mod:() => 'LENIENT' }
+];
+
+/* labels for every non-default setting; empty array = pure V1 feel */
+function settingsModifiers(){
+  const mods = [];
+  for (const o of OPTIONS){
+    const v = SAVE.getSetting(o.key, o.def);
+    if (v !== o.def) mods.push(o.mod(v));
+  }
+  return mods;
+}
+
+let optSel = 0;
+function buildSettings(){
+  const list = document.getElementById('optlist');
+  list.innerHTML = '';
+  OPTIONS.forEach((o, i) => {
+    const row = document.createElement('div');
+    row.className = 'optrow' + (i === optSel ? ' sel' : '');
+    const name = document.createElement('div');
+    name.className = 'on';
+    name.textContent = o.name;
+    const vals = document.createElement('div');
+    vals.className = 'ov';
+    const cur = SAVE.getSetting(o.key, o.def);
+    o.values.forEach(v => {
+      const s = document.createElement('span');
+      s.textContent = o.fmt(v);
+      if (v === cur) s.className = 'cur';
+      s.addEventListener('click', () => { optSel = i; setOption(o, v); });
+      vals.appendChild(s);
+    });
+    row.append(name, vals);
+    list.appendChild(row);
+  });
+}
+
+function moveOptSel(dir){
+  optSel = (optSel + dir + OPTIONS.length) % OPTIONS.length;
+  buildSettings();
+}
+
+function changeOpt(dir){
+  const o = OPTIONS[optSel];
+  const cur = SAVE.getSetting(o.key, o.def);
+  let i = o.values.findIndex(v => v === cur);
+  if (i < 0) i = o.values.indexOf(o.def);
+  setOption(o, o.values[(i + dir + o.values.length) % o.values.length]);
+}
+
+function setOption(o, v){
+  SAVE.setSetting(o.key, v);
+  applySettings();
+  if (SONG) selectSong(SONG);   // refresh speed + zone-band geometry, no restart needed
+  buildSettings();
+}
 /* ---------------- main loop (visuals only) ---------------- */
 function frame(){
   requestAnimationFrame(frame);
@@ -1691,6 +1828,7 @@ function frame(){
 }
 
 /* ---------------- boot ---------------- */
+applySettings();              // saved difficulty options before anything derives from them
 initScene();
 buildRingHud();
 buildTitle();

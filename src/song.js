@@ -196,7 +196,10 @@ function applySongTiming(song){
   PHRASE_SEC = SPBAR * PHRASE_BARS;
   TOTAL_PHRASES = song.meta.lengthBars / PHRASE_BARS;
   TOTAL_STEPS = song.meta.lengthBars * STEPS_PER_BAR;
-  SPEED = (song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed;
+  // §6 speed multiplier scales tunnel speed (and with it the world-space
+  // spawn distance) — never audio
+  SPEED = ((song.meta.overrides && song.meta.overrides.speed) || CONFIG.speed)
+          * SAVE.getSetting('speedMult', 1);
 }
 
 /* Make a song current: timing globals, per-track audio buses (if the

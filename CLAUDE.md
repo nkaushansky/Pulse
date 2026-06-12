@@ -102,6 +102,17 @@ etc. land here in later sections). Nothing else goes in the blob.
 browsing) or a corrupt/missing blob degrades to session-only state and
 must never break boot. No other module touches localStorage.
 
+Settings keys in use (V2 §6): `speedMult` (0.75|1|1.25), `windowMode`
+(`strict|normal|relaxed`), `lenient` (bool). Defaults reproduce V1 feel
+exactly. Runs with any non-default setting are tagged on the results
+screen and are NEVER recorded to the saved bests — default-settings
+records must not be displaced by assisted (or hardened) runs. The
+`OPTIONS` table in `src/hud.js` is the single source of option
+definitions; `applySettings()` maps `windowMode` onto `HIT_WINDOW` /
+`PERFECT_WINDOW` (perfect scales proportionally), and the speed
+multiplier applies inside `applySongTiming()` (tunnel speed only,
+never audio).
+
 ## Audio routing (V2 §1 — per-hit note audio)
 
 A gem hit on an uncaptured track performs the track's **actual pattern

@@ -23,7 +23,16 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowUp') moveSongSel(-1);
     else if (e.code === 'ArrowDown') moveSongSel(1);
     else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') startGame();
+    else if (e.code === 'KeyO') enterSettings();
     else if (e.code === 'Escape') backToTitle();
+    return;
+  }
+  if (appState === 'settings'){
+    if (e.code === 'ArrowUp') moveOptSel(-1);
+    else if (e.code === 'ArrowDown') moveOptSel(1);
+    else if (e.code === 'ArrowLeft') changeOpt(-1);
+    else if (e.code === 'ArrowRight') changeOpt(1);
+    else if (e.code === 'Escape' || e.code === 'KeyO' || e.code === 'Enter') enterSelect();
     return;
   }
   if (appState === 'over' || (G && G.state === 'over')){
@@ -47,8 +56,16 @@ function enterSelect(){
   ui.hud.classList.add('hidden');
   ui.title.classList.add('hidden');
   ui.results.classList.add('hidden');
+  ui.settings.classList.add('hidden');
   buildSelect();
   ui.select.classList.remove('hidden');
+}
+
+function enterSettings(){
+  appState = 'settings';
+  ui.select.classList.add('hidden');
+  buildSettings();
+  ui.settings.classList.remove('hidden');
 }
 
 function backToTitle(){

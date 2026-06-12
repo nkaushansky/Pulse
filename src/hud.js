@@ -4,6 +4,7 @@ const ui = {
   title: document.getElementById('title'),
   pause: document.getElementById('pause'),
   select: document.getElementById('select'),
+  settings: document.getElementById('settings'),
   results: document.getElementById('results'),
   score: document.getElementById('score'),
   judge: document.getElementById('judge'),
@@ -141,3 +142,69 @@ function buildSelect(){
   });
 }
 
+
+/* ---------------- options / difficulty settings (V2 §6) ---------------- */
+const OPTIONS = [
+  { key:'speedMult', name:'TUNNEL SPEED', values:[0.75, 1, 1.25], def:1,
+    fmt:v => v + '\u00d7', mod:v => v + '\u00d7 SPEED' },
+  { key:'windowMode', name:'HIT WINDOW', values:['strict','normal','relaxed'], def:'normal',
+    fmt:v => ({ strict:'STRICT \u00b170', normal:'NORMAL \u00b190', relaxed:'RELAXED \u00b1120' })[v],
+    mod:v => v.toUpperCase() },
+  { key:'lenient', name:'LENIENT MODE', values:[false, true], def:false,
+    fmt:v => v ? 'ON' : 'OFF', mod:() => 'LENIENT' }
+];
+
+/* labels for every non-default setting; empty array = pure V1 feel */
+function settingsModifiers(){
+  const mods = [];
+  for (const o of OPTIONS){
+    const v = SAVE.getSetting(o.key, o.def);
+    if (v !== o.def) mods.push(o.mod(v));
+  }
+  return mods;
+}
+
+let optSel = 0;
+function buildSettings(){
+  const list = document.getElementById('optlist');
+  list.innerHTML = '';
+  OPTIONS.forEach((o, i) => {
+    const row = document.createElement('div');
+    row.className = 'optrow' + (i === optSel ? ' sel' : '');
+    const name = document.createElement('div');
+    name.className = 'on';
+    name.textContent = o.name;
+    const vals = document.createElement('div');
+    vals.className = 'ov';
+    const cur = SAVE.getSetting(o.key, o.def);
+    o.values.forEach(v => {
+      const s = document.createElement('span');
+      s.textContent = o.fmt(v);
+      if (v === cur) s.className = 'cur';
+      s.addEventListener('click', () => { optSel = i; setOption(o, v); });
+      vals.appendChild(s);
+    });
+    row.append(name, vals);
+    list.appendChild(row);
+  });
+}
+
+function moveOptSel(dir){
+  optSel = (optSel + dir + OPTIONS.length) % OPTIONS.length;
+  buildSettings();
+}
+
+function changeOpt(dir){
+  const o = OPTIONS[optSel];
+  const cur = SAVE.getSetting(o.key, o.def);
+  let i = o.values.findIndex(v => v === cur);
+  if (i < 0) i = o.values.indexOf(o.def);
+  setOption(o, o.values[(i + dir + o.values.length) % o.values.length]);
+}
+
+function setOption(o, v){
+  SAVE.setSetting(o.key, v);
+  applySettings();
+  if (SONG) selectSong(SONG);   // refresh speed + zone-band geometry, no restart needed
+  buildSettings();
+}

@@ -146,6 +146,23 @@
     letter-spacing:.18em;color:var(--dim)}
   .songrow .sb{margin-top:4px;font-size:clamp(10px,1.3vw,12px);
     letter-spacing:.18em;color:var(--lane2)}
+
+  /* ---------- options ---------- */
+  #optlist{margin-top:30px;display:flex;flex-direction:column;gap:14px;
+    width:min(92vw,560px)}
+  .optrow{border:1px solid rgba(120,160,255,.25);padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:center;gap:18px;
+    background:rgba(10,16,40,.35)}
+  .optrow.sel{border-color:#fff;background:rgba(30,50,100,.45);
+    box-shadow:0 0 18px rgba(120,200,255,.35)}
+  .optrow .on{font-size:clamp(12px,1.7vw,16px);letter-spacing:.22em;color:#fff}
+  .optrow .ov{display:flex;gap:16px;font-size:clamp(10px,1.4vw,13px);
+    letter-spacing:.15em;color:var(--dim);text-align:right}
+  .optrow .ov span{cursor:pointer}
+  .optrow .ov span.cur{color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.7)}
+
+  #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
+    letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
 </style>
 </head>
 <body>
@@ -181,7 +198,14 @@
 <div id="select" class="overlay hidden">
   <div class="gametitle selecttitle">SELECT SIGNAL</div>
   <div id="songlist"></div>
-  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; ESC BACK</div>
+  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+</div>
+
+<div id="settings" class="overlay hidden">
+  <div class="gametitle selecttitle">OPTIONS</div>
+  <div id="optlist"></div>
+  <div class="footnote">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+    NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
 </div>
 
 <div id="pause" class="overlay hidden">
@@ -192,6 +216,7 @@
 <div id="results" class="overlay hidden">
   <div class="grade" id="grade">A</div>
   <div class="verdict" id="verdict">SIGNAL CLEAR</div>
+  <div id="r-mods" class="hidden"></div>
   <div class="stats">
     <span>SCORE</span><span class="v" id="r-score">0</span>
     <span>GEMS HIT</span><span class="v" id="r-hits">0</span>

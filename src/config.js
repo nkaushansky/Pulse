@@ -12,8 +12,18 @@ const STEPS_PER_BAR = 16;
 const STEPS_PER_PHRASE = 32;     // phrase = 2 bars
 const PHRASE_BARS = 2;
 const CAPTURE_PHRASES = 4;       // 8 bars
-const HIT_WINDOW = 0.090;
-const PERFECT_WINDOW = 0.040;
+
+/* Judgment windows are settings-scaled (V2 §6); defaults are V1's
+   values exactly. Assigned by applySettings(). */
+let HIT_WINDOW = 0.090;
+let PERFECT_WINDOW = 0.040;
+const WINDOW_PRESETS = { strict:0.070, normal:0.090, relaxed:0.120 };
+
+function applySettings(){
+  const wm = SAVE.getSetting('windowMode', 'normal');
+  HIT_WINDOW = WINDOW_PRESETS[wm] || WINDOW_PRESETS.normal;
+  PERFECT_WINDOW = 0.040 * (HIT_WINDOW / 0.090);   // scales proportionally
+}
 
 let BPM = 120;
 let SPB = 60 / BPM;              // seconds per beat

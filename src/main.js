@@ -63,6 +63,7 @@ function frame(){
 }
 
 /* ---------------- boot ---------------- */
+applySettings();              // saved difficulty options before anything derives from them
 initScene();
 buildRingHud();
 buildTitle();

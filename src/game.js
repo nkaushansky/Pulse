@@ -159,8 +159,12 @@ function onLaneInput(lane){
       if (a.hits >= a.total) captureTrack(tr, p);
     }
   } else if (a.active && !a.broken){
-    pressFeedback(lane, 'miss');
-    breakPhrase(); // empty press — Frequency-strict
+    if (SAVE.getSetting('lenient', false)){
+      pressFeedback(lane, 'dead');   // §6 lenient mode: empty press is harmless
+    } else {
+      pressFeedback(lane, 'miss');
+      breakPhrase(); // empty press — Frequency-strict (the default)
+    }
   } else {
     pressFeedback(lane, 'dead');     // empty press in an already-dead phrase
   }
@@ -222,7 +226,18 @@ function finish(kind){
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
-  renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
+  // §6: runs with modified settings are tagged and never enter the
+  // saved bests — default-settings records can't be displaced by them
+  const mods = settingsModifiers();
+  const modsEl = document.getElementById('r-mods');
+  if (mods.length){
+    modsEl.textContent = mods.join(' \u00b7 ') + ' \u2014 NOT RANKED';
+    modsEl.classList.remove('hidden');
+    renderTopScores({ scores: SAVE.getScores(SONG.meta.title), rank:-1 });
+  } else {
+    modsEl.classList.add('hidden');
+    renderTopScores(SAVE.recordResult(SONG.meta.title, { score:G.score, grade, acc }));
+  }
   ui.results.classList.remove('hidden');
 }
 
