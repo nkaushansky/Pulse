@@ -46,9 +46,24 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('title').addEventListener('click', () => {
   if (appState === 'title') enterSelect();
 });
-document.getElementById('results').addEventListener('click', () => {
+
+/* clickable / tappable flow controls — same paths the keyboard takes */
+document.getElementById('btn-retry').addEventListener('click', () => {
   if (G && G.state === 'over'){ newGame(); appState = 'running'; }
 });
+document.getElementById('btn-select').addEventListener('click', () => {
+  if (G && G.state === 'over') enterSelect();
+});
+document.getElementById('btn-options').addEventListener('click', () => {
+  if (appState === 'select') enterSettings();
+});
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (appState === 'select') backToTitle();
+});
+document.getElementById('btn-done').addEventListener('click', () => {
+  if (appState === 'settings') enterSelect();
+});
+document.getElementById('pause').addEventListener('click', () => INPUT.emit('pause'));
 
 function enterSelect(){
   appState = 'select';
@@ -107,4 +122,100 @@ function startGame(){
     newGame();
   });
 }
+
+/* ---------------- touch backend (V2 §3) ----------------
+   A second emitter into INPUT.emit(); game logic is untouched and the
+   keyboard keeps working in touch mode. setInputMode only swaps the HUD
+   label set and gates the touch-only DOM via body.touch. */
+function setInputMode(mode){
+  CONFIG.inputLabels = CONFIG.inputLabelSets[mode] || CONFIG.inputLabelSets.key;
+  document.body.classList.toggle('touch', mode === 'touch');
+}
+
+/* pure gesture decisions (Node-tested in test/touch.test.js): the three
+   zones are exact screen thirds, matching lanes 0/1/2 left-to-right; a
+   drag is a rotate swipe once it is far enough and flatter than ~1:1.3 */
+function touchLane(x, w){ return Math.max(0, Math.min(2, Math.floor(x * 3 / w))); }
+function swipeDir(dx, dy, w){
+  if (Math.abs(dx) < Math.max(36, w * 0.07)) return 0;
+  return Math.abs(dx) > Math.abs(dy) * 1.3 ? (dx < 0 ? -1 : 1) : 0;
+}
+
+(function initTouchInput(){
+  const lanes = document.getElementById('tlanes');
+  const swipe = document.getElementById('tswipe');
+  const pauseBtn = document.getElementById('tpause');
+
+  // lane zones: every touch point is its own press (multi-touch chords)
+  const held = new Map();          // touch id -> zone element
+  function pressZone(t){
+    const lane = touchLane(t.clientX, window.innerWidth);
+    INPUT.emit('lane' + lane);
+    const el = lanes.children[lane];
+    el.classList.add('press');
+    held.set(t.identifier, el);
+  }
+  function liftZone(t){
+    const el = held.get(t.identifier);
+    if (!el) return;
+    held.delete(t.identifier);
+    let stillHeld = false;
+    held.forEach(v => { if (v === el) stillHeld = true; });
+    if (!stillHeld) el.classList.remove('press');
+  }
+  lanes.addEventListener('touchstart', e => {
+    e.preventDefault();            // no synthetic clicks, no zoom/scroll
+    for (let i = 0; i < e.changedTouches.length; i++) pressZone(e.changedTouches[i]);
+  }, { passive:false });
+  const lift = e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) liftZone(e.changedTouches[i]);
+  };
+  lanes.addEventListener('touchend', lift, { passive:false });
+  lanes.addEventListener('touchcancel', lift, { passive:false });
+
+  // swipe region (everything above the zones): one rotate per swipe,
+  // fired the moment the threshold is crossed, not on finger lift
+  const drags = new Map();         // touch id -> {x, y, done}
+  swipe.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++){
+      const t = e.changedTouches[i];
+      drags.set(t.identifier, { x:t.clientX, y:t.clientY, done:false });
+    }
+  }, { passive:false });
+  swipe.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++){
+      const t = e.changedTouches[i];
+      const d = drags.get(t.identifier);
+      if (!d || d.done) continue;
+      const dir = swipeDir(t.clientX - d.x, t.clientY - d.y, window.innerWidth);
+      if (dir){
+        d.done = true;
+        INPUT.emit(dir < 0 ? 'rotateLeft' : 'rotateRight');
+      }
+    }
+  }, { passive:false });
+  const endDrag = e => {
+    for (let i = 0; i < e.changedTouches.length; i++) drags.delete(e.changedTouches[i].identifier);
+  };
+  swipe.addEventListener('touchend', endDrag);
+  swipe.addEventListener('touchcancel', endDrag);
+
+  pauseBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    INPUT.emit('pause');
+  }, { passive:false });
+  pauseBtn.addEventListener('click', () => INPUT.emit('pause'));   // mouse only: touchstart ate the tap
+
+  // coarse-pointer detection happens at boot (main.js); the first real
+  // touch flips the UI for devices the media query missed
+  window.addEventListener('touchstart', () => {
+    if (!document.body.classList.contains('touch')){
+      setInputMode('touch');
+      buildTitle();
+    }
+  }, { once:true, passive:true });
+})();
 

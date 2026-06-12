@@ -9,7 +9,12 @@
    A track is EITHER synth-pattern-driven OR stem-driven.
    chart is authored as a 2-bar loop (_chartLoop) and expanded to the
    canonical [{bar,beat,lane}] form by prepareSong(). Adding a song is
-   data only: push a package into SONGS, zero new code paths. */
+   data only: push a package into SONGS, zero new code paths.
+
+   Mobile bound (V2 §3 density review): charts must stay two-thumb
+   playable on the touch zones — at most 2 simultaneous lanes (current
+   charts use 1), >=240 ms between same-lane hits, >=200 ms between any
+   two hits. test/charts.test.js enforces this; run it when authoring. */
 const SONGS = [
 {
   meta: { title:'NEON CIRCUIT', bpm:120, timeSignature:[4,4],

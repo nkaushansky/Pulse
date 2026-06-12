@@ -66,6 +66,9 @@ function frame(){
 applySettings();              // saved difficulty options before anything derives from them
 initScene();
 buildRingHud();
+// touch-first devices boot straight into the touch label set (V2 §3);
+// a later first touch can still flip a missed detection (see input.js)
+setInputMode(window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'key');
 buildTitle();
 selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){

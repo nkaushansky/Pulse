@@ -49,12 +49,23 @@ const CONFIG = {
     Escape:'pause'
   },
   // HUD labels come from config, never from keycode assumptions.
-  inputLabels: {
-    lane0:'J', lane1:'K', lane2:'L',
-    lanesAlt:'\u2190 \u2193 \u2192',
-    rotateLeft:'Q / A', rotateRight:'E / D', pause:'ESC'
+  // Two sets (V2 §3): the active one is CONFIG.inputLabels, swapped by
+  // setInputMode() in input.js. laneGroup, when present, replaces the
+  // per-key lane chips with one combined hint.
+  inputLabelSets: {
+    key: {
+      lane0:'J', lane1:'K', lane2:'L',
+      lanesAlt:'\u2190 \u2193 \u2192',
+      rotateLeft:'Q / A', rotateRight:'E / D', pause:'ESC'
+    },
+    touch: {
+      lane0:'LEFT', lane1:'MID', lane2:'RIGHT',
+      lanesAlt:'TAP ZONES', laneGroup:'TAP THE LANE ZONES',
+      rotateLeft:'\u25c0 SWIPE', rotateRight:'SWIPE \u25b6', pause:'\u23f8'
+    }
   }
 };
+CONFIG.inputLabels = CONFIG.inputLabelSets.key;   // active set; see setInputMode()
 
 const LANE_COLORS = [0x33eeff, 0xff44dd, 0xffcc33];
 

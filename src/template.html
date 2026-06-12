@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>PULSE</title>
 <style>
   :root{
@@ -12,7 +12,8 @@
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;overflow:hidden;background:#000;
     font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
-    color:var(--ink);-webkit-user-select:none;user-select:none}
+    color:var(--ink);-webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;overscroll-behavior:none}
   #scene{position:fixed;inset:0}
   #scene canvas{display:block}
 
@@ -93,7 +94,11 @@
   .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
     align-items:center;justify-content:center;text-align:center;
     background:radial-gradient(ellipse at center,rgba(4,6,20,.82),rgba(0,0,4,.95));
-    backdrop-filter:blur(3px);padding:24px}
+    backdrop-filter:blur(3px);padding:24px;
+    overflow-y:auto;overscroll-behavior:contain}
+  /* flexible spacers: centered while content fits, scrollable when it
+     doesn't (a centered flex column would clip its top otherwise) */
+  .overlay::before,.overlay::after{content:'';flex:1 1 0}
   .gametitle{font-size:clamp(54px,11vw,120px);font-weight:700;letter-spacing:.32em;
     margin-left:.32em;color:#fff;
     text-shadow:0 0 18px var(--lane0),0 0 60px var(--lane1),0 0 120px var(--lane1)}
@@ -163,6 +168,66 @@
 
   #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
     letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
+
+  /* ---------- overlay buttons (mouse + touch) ---------- */
+  .btnrow{margin-top:26px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .obtn{border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
+    padding:12px 22px;min-height:44px;display:flex;align-items:center;
+    font-size:clamp(11px,1.5vw,14px);letter-spacing:.25em;color:#fff;cursor:pointer}
+  .obtn:hover{border-color:#fff;box-shadow:0 0 14px rgba(120,200,255,.35)}
+
+  /* ---------- touch layer (V2 §3) ----------
+     Zone height: bottom third in portrait, shallower in landscape,
+     never under 80px (thumb-sized). dvh, where supported, tracks the
+     visible viewport under mobile browser chrome. */
+  :root{--tzone:max(80px,33vh)}
+  @media (orientation:landscape){:root{--tzone:max(80px,26vh)}}
+  @supports (height:1dvh){
+    :root{--tzone:max(80px,33dvh)}
+    @media (orientation:landscape){:root{--tzone:max(80px,26dvh)}}
+  }
+  /* mode prompts: .km shows in keyboard mode, .tm in touch mode */
+  body.touch .km{display:none}
+  body:not(.touch) .tm{display:none}
+  #touch{display:none}
+  body.touch #touch{display:block}
+  #tswipe{position:fixed;left:0;right:0;top:0;z-index:14;touch-action:none;
+    bottom:calc(var(--tzone) + env(safe-area-inset-bottom,0px))}
+  #tlanes{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;
+    height:calc(var(--tzone) + env(safe-area-inset-bottom,0px));touch-action:none}
+  .tlane{flex:1;position:relative;border-top:1px solid;border-left:1px solid;
+    padding-top:8px;text-align:center}
+  .tlane:last-child{border-right:1px solid}
+  .tlane i{font-style:normal;font-size:9px;letter-spacing:.3em;opacity:.5}
+  .tlane[data-lane="0"]{border-color:rgba(51,238,255,.35);color:var(--lane0);
+    background:linear-gradient(rgba(51,238,255,.03),rgba(51,238,255,.12))}
+  .tlane[data-lane="1"]{border-color:rgba(255,68,221,.35);color:var(--lane1);
+    background:linear-gradient(rgba(255,68,221,.03),rgba(255,68,221,.12))}
+  .tlane[data-lane="2"]{border-color:rgba(255,204,51,.35);color:var(--lane2);
+    background:linear-gradient(rgba(255,204,51,.03),rgba(255,204,51,.12))}
+  .tlane.press[data-lane="0"]{background:rgba(51,238,255,.30)}
+  .tlane.press[data-lane="1"]{background:rgba(255,68,221,.30)}
+  .tlane.press[data-lane="2"]{background:rgba(255,204,51,.30)}
+  #tpause{position:fixed;z-index:16;width:46px;height:46px;border-radius:50%;
+    top:calc(96px + env(safe-area-inset-top,0px));
+    right:calc(14px + env(safe-area-inset-right,0px));
+    border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
+    color:var(--ink);display:flex;align-items:center;justify-content:center;
+    touch-action:none}
+  #tpause::before,#tpause::after{content:'';width:4px;height:16px;margin:0 3px;
+    background:currentColor;box-shadow:0 0 6px rgba(120,200,255,.6)}
+
+  /* touch mode: bottom HUD clears the lane zones */
+  body.touch #keyhints{bottom:calc(var(--tzone) + 10px)}
+  body.touch #energywrap{bottom:calc(var(--tzone) + 34px)}
+  body.touch #trackname{bottom:calc(var(--tzone) + 62px)}
+  body.touch #judge{bottom:auto;top:47%}
+  body.touch .optrow .ov span{padding:12px 6px;margin:-12px -2px}
+  @media (orientation:landscape){
+    body.touch #keyhints{display:none}
+    body.touch #energywrap{bottom:calc(var(--tzone) + 16px)}
+    body.touch #trackname{bottom:calc(var(--tzone) + 40px)}
+  }
 </style>
 </head>
 <body>
@@ -186,31 +251,53 @@
   <div id="count"></div>
 </div>
 
+<div id="touch">
+  <div id="tswipe"></div>
+  <div id="tpause"></div>
+  <div id="tlanes">
+    <div class="tlane" data-lane="0"><i></i></div>
+    <div class="tlane" data-lane="1"><i></i></div>
+    <div class="tlane" data-lane="2"><i></i></div>
+  </div>
+</div>
+
 <div id="title" class="overlay">
   <div class="gametitle">PULSE</div>
   <div class="subtitle">CAPTURE THE SIGNAL</div>
   <div class="songmeta" id="titlemeta"></div>
   <div class="howto" id="howto"></div>
-  <div class="startprompt">CLICK OR PRESS ANY KEY</div>
+  <div class="startprompt km">CLICK OR PRESS ANY KEY</div>
+  <div class="startprompt tm">TAP TO START</div>
   <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
 </div>
 
 <div id="select" class="overlay hidden">
   <div class="gametitle selecttitle">SELECT SIGNAL</div>
   <div id="songlist"></div>
-  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+  <div class="btnrow">
+    <div class="obtn" id="btn-options">OPTIONS</div>
+    <div class="obtn" id="btn-back">BACK</div>
+  </div>
+  <div class="footnote km">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+  <div class="footnote tm">TAP A SIGNAL TO PLAY</div>
 </div>
 
 <div id="settings" class="overlay hidden">
   <div class="gametitle selecttitle">OPTIONS</div>
   <div id="optlist"></div>
-  <div class="footnote">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+  <div class="btnrow">
+    <div class="obtn" id="btn-done">DONE</div>
+  </div>
+  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+    NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
+  <div class="footnote tm">TAP A VALUE TO SET IT<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
 </div>
 
 <div id="pause" class="overlay hidden">
   <div class="gametitle">PAUSED</div>
-  <div class="startprompt">PRESS ESC TO RESUME</div>
+  <div class="startprompt km">PRESS ESC TO RESUME</div>
+  <div class="startprompt tm">TAP TO RESUME</div>
 </div>
 
 <div id="results" class="overlay hidden">
@@ -226,7 +313,11 @@
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
   <div id="topscores"></div>
-  <div class="startprompt" style="margin-top:30px">R RETRY &middot; S SONG SELECT</div>
+  <div class="btnrow">
+    <div class="obtn" id="btn-retry">RETRY</div>
+    <div class="obtn" id="btn-select">SONG SELECT</div>
+  </div>
+  <div class="footnote km">R RETRY &middot; S SONG SELECT</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

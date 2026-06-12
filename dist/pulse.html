@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>PULSE</title>
 <style>
   :root{
@@ -12,7 +12,8 @@
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;overflow:hidden;background:#000;
     font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
-    color:var(--ink);-webkit-user-select:none;user-select:none}
+    color:var(--ink);-webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;overscroll-behavior:none}
   #scene{position:fixed;inset:0}
   #scene canvas{display:block}
 
@@ -93,7 +94,11 @@
   .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
     align-items:center;justify-content:center;text-align:center;
     background:radial-gradient(ellipse at center,rgba(4,6,20,.82),rgba(0,0,4,.95));
-    backdrop-filter:blur(3px);padding:24px}
+    backdrop-filter:blur(3px);padding:24px;
+    overflow-y:auto;overscroll-behavior:contain}
+  /* flexible spacers: centered while content fits, scrollable when it
+     doesn't (a centered flex column would clip its top otherwise) */
+  .overlay::before,.overlay::after{content:'';flex:1 1 0}
   .gametitle{font-size:clamp(54px,11vw,120px);font-weight:700;letter-spacing:.32em;
     margin-left:.32em;color:#fff;
     text-shadow:0 0 18px var(--lane0),0 0 60px var(--lane1),0 0 120px var(--lane1)}
@@ -163,6 +168,66 @@
 
   #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
     letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
+
+  /* ---------- overlay buttons (mouse + touch) ---------- */
+  .btnrow{margin-top:26px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .obtn{border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
+    padding:12px 22px;min-height:44px;display:flex;align-items:center;
+    font-size:clamp(11px,1.5vw,14px);letter-spacing:.25em;color:#fff;cursor:pointer}
+  .obtn:hover{border-color:#fff;box-shadow:0 0 14px rgba(120,200,255,.35)}
+
+  /* ---------- touch layer (V2 §3) ----------
+     Zone height: bottom third in portrait, shallower in landscape,
+     never under 80px (thumb-sized). dvh, where supported, tracks the
+     visible viewport under mobile browser chrome. */
+  :root{--tzone:max(80px,33vh)}
+  @media (orientation:landscape){:root{--tzone:max(80px,26vh)}}
+  @supports (height:1dvh){
+    :root{--tzone:max(80px,33dvh)}
+    @media (orientation:landscape){:root{--tzone:max(80px,26dvh)}}
+  }
+  /* mode prompts: .km shows in keyboard mode, .tm in touch mode */
+  body.touch .km{display:none}
+  body:not(.touch) .tm{display:none}
+  #touch{display:none}
+  body.touch #touch{display:block}
+  #tswipe{position:fixed;left:0;right:0;top:0;z-index:14;touch-action:none;
+    bottom:calc(var(--tzone) + env(safe-area-inset-bottom,0px))}
+  #tlanes{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;
+    height:calc(var(--tzone) + env(safe-area-inset-bottom,0px));touch-action:none}
+  .tlane{flex:1;position:relative;border-top:1px solid;border-left:1px solid;
+    padding-top:8px;text-align:center}
+  .tlane:last-child{border-right:1px solid}
+  .tlane i{font-style:normal;font-size:9px;letter-spacing:.3em;opacity:.5}
+  .tlane[data-lane="0"]{border-color:rgba(51,238,255,.35);color:var(--lane0);
+    background:linear-gradient(rgba(51,238,255,.03),rgba(51,238,255,.12))}
+  .tlane[data-lane="1"]{border-color:rgba(255,68,221,.35);color:var(--lane1);
+    background:linear-gradient(rgba(255,68,221,.03),rgba(255,68,221,.12))}
+  .tlane[data-lane="2"]{border-color:rgba(255,204,51,.35);color:var(--lane2);
+    background:linear-gradient(rgba(255,204,51,.03),rgba(255,204,51,.12))}
+  .tlane.press[data-lane="0"]{background:rgba(51,238,255,.30)}
+  .tlane.press[data-lane="1"]{background:rgba(255,68,221,.30)}
+  .tlane.press[data-lane="2"]{background:rgba(255,204,51,.30)}
+  #tpause{position:fixed;z-index:16;width:46px;height:46px;border-radius:50%;
+    top:calc(96px + env(safe-area-inset-top,0px));
+    right:calc(14px + env(safe-area-inset-right,0px));
+    border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
+    color:var(--ink);display:flex;align-items:center;justify-content:center;
+    touch-action:none}
+  #tpause::before,#tpause::after{content:'';width:4px;height:16px;margin:0 3px;
+    background:currentColor;box-shadow:0 0 6px rgba(120,200,255,.6)}
+
+  /* touch mode: bottom HUD clears the lane zones */
+  body.touch #keyhints{bottom:calc(var(--tzone) + 10px)}
+  body.touch #energywrap{bottom:calc(var(--tzone) + 34px)}
+  body.touch #trackname{bottom:calc(var(--tzone) + 62px)}
+  body.touch #judge{bottom:auto;top:47%}
+  body.touch .optrow .ov span{padding:12px 6px;margin:-12px -2px}
+  @media (orientation:landscape){
+    body.touch #keyhints{display:none}
+    body.touch #energywrap{bottom:calc(var(--tzone) + 16px)}
+    body.touch #trackname{bottom:calc(var(--tzone) + 40px)}
+  }
 </style>
 </head>
 <body>
@@ -186,31 +251,53 @@
   <div id="count"></div>
 </div>
 
+<div id="touch">
+  <div id="tswipe"></div>
+  <div id="tpause"></div>
+  <div id="tlanes">
+    <div class="tlane" data-lane="0"><i></i></div>
+    <div class="tlane" data-lane="1"><i></i></div>
+    <div class="tlane" data-lane="2"><i></i></div>
+  </div>
+</div>
+
 <div id="title" class="overlay">
   <div class="gametitle">PULSE</div>
   <div class="subtitle">CAPTURE THE SIGNAL</div>
   <div class="songmeta" id="titlemeta"></div>
   <div class="howto" id="howto"></div>
-  <div class="startprompt">CLICK OR PRESS ANY KEY</div>
+  <div class="startprompt km">CLICK OR PRESS ANY KEY</div>
+  <div class="startprompt tm">TAP TO START</div>
   <div class="footnote">HEADPHONES RECOMMENDED &middot; CLEAR A FULL 2-BAR PHRASE TO CAPTURE A TRACK</div>
 </div>
 
 <div id="select" class="overlay hidden">
   <div class="gametitle selecttitle">SELECT SIGNAL</div>
   <div id="songlist"></div>
-  <div class="footnote">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+  <div class="btnrow">
+    <div class="obtn" id="btn-options">OPTIONS</div>
+    <div class="obtn" id="btn-back">BACK</div>
+  </div>
+  <div class="footnote km">&uarr; &darr; SELECT &middot; ENTER OR CLICK TO PLAY &middot; O OPTIONS &middot; ESC BACK</div>
+  <div class="footnote tm">TAP A SIGNAL TO PLAY</div>
 </div>
 
 <div id="settings" class="overlay hidden">
   <div class="gametitle selecttitle">OPTIONS</div>
   <div id="optlist"></div>
-  <div class="footnote">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+  <div class="btnrow">
+    <div class="obtn" id="btn-done">DONE</div>
+  </div>
+  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+    NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
+  <div class="footnote tm">TAP A VALUE TO SET IT<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
 </div>
 
 <div id="pause" class="overlay hidden">
   <div class="gametitle">PAUSED</div>
-  <div class="startprompt">PRESS ESC TO RESUME</div>
+  <div class="startprompt km">PRESS ESC TO RESUME</div>
+  <div class="startprompt tm">TAP TO RESUME</div>
 </div>
 
 <div id="results" class="overlay hidden">
@@ -226,7 +313,11 @@
     <span>BEST MULTIPLIER</span><span class="v" id="r-mult">&times;1</span>
   </div>
   <div id="topscores"></div>
-  <div class="startprompt" style="margin-top:30px">R RETRY &middot; S SONG SELECT</div>
+  <div class="btnrow">
+    <div class="obtn" id="btn-retry">RETRY</div>
+    <div class="obtn" id="btn-select">SONG SELECT</div>
+  </div>
+  <div class="footnote km">R RETRY &middot; S SONG SELECT</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -282,12 +373,23 @@ const CONFIG = {
     Escape:'pause'
   },
   // HUD labels come from config, never from keycode assumptions.
-  inputLabels: {
-    lane0:'J', lane1:'K', lane2:'L',
-    lanesAlt:'\u2190 \u2193 \u2192',
-    rotateLeft:'Q / A', rotateRight:'E / D', pause:'ESC'
+  // Two sets (V2 §3): the active one is CONFIG.inputLabels, swapped by
+  // setInputMode() in input.js. laneGroup, when present, replaces the
+  // per-key lane chips with one combined hint.
+  inputLabelSets: {
+    key: {
+      lane0:'J', lane1:'K', lane2:'L',
+      lanesAlt:'\u2190 \u2193 \u2192',
+      rotateLeft:'Q / A', rotateRight:'E / D', pause:'ESC'
+    },
+    touch: {
+      lane0:'LEFT', lane1:'MID', lane2:'RIGHT',
+      lanesAlt:'TAP ZONES', laneGroup:'TAP THE LANE ZONES',
+      rotateLeft:'\u25c0 SWIPE', rotateRight:'SWIPE \u25b6', pause:'\u23f8'
+    }
   }
 };
+CONFIG.inputLabels = CONFIG.inputLabelSets.key;   // active set; see setInputMode()
 
 const LANE_COLORS = [0x33eeff, 0xff44dd, 0xffcc33];
 
@@ -429,7 +531,12 @@ const INSTRUMENTS = {
    A track is EITHER synth-pattern-driven OR stem-driven.
    chart is authored as a 2-bar loop (_chartLoop) and expanded to the
    canonical [{bar,beat,lane}] form by prepareSong(). Adding a song is
-   data only: push a package into SONGS, zero new code paths. */
+   data only: push a package into SONGS, zero new code paths.
+
+   Mobile bound (V2 §3 density review): charts must stay two-thumb
+   playable on the touch zones — at most 2 simultaneous lanes (current
+   charts use 1), >=240 ms between same-lane hits, >=200 ms between any
+   two hits. test/charts.test.js enforces this; run it when authoring. */
 const SONGS = [
 {
   meta: { title:'NEON CIRCUIT', bpm:120, timeSignature:[4,4],
@@ -1491,9 +1598,24 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('title').addEventListener('click', () => {
   if (appState === 'title') enterSelect();
 });
-document.getElementById('results').addEventListener('click', () => {
+
+/* clickable / tappable flow controls — same paths the keyboard takes */
+document.getElementById('btn-retry').addEventListener('click', () => {
   if (G && G.state === 'over'){ newGame(); appState = 'running'; }
 });
+document.getElementById('btn-select').addEventListener('click', () => {
+  if (G && G.state === 'over') enterSelect();
+});
+document.getElementById('btn-options').addEventListener('click', () => {
+  if (appState === 'select') enterSettings();
+});
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (appState === 'select') backToTitle();
+});
+document.getElementById('btn-done').addEventListener('click', () => {
+  if (appState === 'settings') enterSelect();
+});
+document.getElementById('pause').addEventListener('click', () => INPUT.emit('pause'));
 
 function enterSelect(){
   appState = 'select';
@@ -1552,6 +1674,102 @@ function startGame(){
     newGame();
   });
 }
+
+/* ---------------- touch backend (V2 §3) ----------------
+   A second emitter into INPUT.emit(); game logic is untouched and the
+   keyboard keeps working in touch mode. setInputMode only swaps the HUD
+   label set and gates the touch-only DOM via body.touch. */
+function setInputMode(mode){
+  CONFIG.inputLabels = CONFIG.inputLabelSets[mode] || CONFIG.inputLabelSets.key;
+  document.body.classList.toggle('touch', mode === 'touch');
+}
+
+/* pure gesture decisions (Node-tested in test/touch.test.js): the three
+   zones are exact screen thirds, matching lanes 0/1/2 left-to-right; a
+   drag is a rotate swipe once it is far enough and flatter than ~1:1.3 */
+function touchLane(x, w){ return Math.max(0, Math.min(2, Math.floor(x * 3 / w))); }
+function swipeDir(dx, dy, w){
+  if (Math.abs(dx) < Math.max(36, w * 0.07)) return 0;
+  return Math.abs(dx) > Math.abs(dy) * 1.3 ? (dx < 0 ? -1 : 1) : 0;
+}
+
+(function initTouchInput(){
+  const lanes = document.getElementById('tlanes');
+  const swipe = document.getElementById('tswipe');
+  const pauseBtn = document.getElementById('tpause');
+
+  // lane zones: every touch point is its own press (multi-touch chords)
+  const held = new Map();          // touch id -> zone element
+  function pressZone(t){
+    const lane = touchLane(t.clientX, window.innerWidth);
+    INPUT.emit('lane' + lane);
+    const el = lanes.children[lane];
+    el.classList.add('press');
+    held.set(t.identifier, el);
+  }
+  function liftZone(t){
+    const el = held.get(t.identifier);
+    if (!el) return;
+    held.delete(t.identifier);
+    let stillHeld = false;
+    held.forEach(v => { if (v === el) stillHeld = true; });
+    if (!stillHeld) el.classList.remove('press');
+  }
+  lanes.addEventListener('touchstart', e => {
+    e.preventDefault();            // no synthetic clicks, no zoom/scroll
+    for (let i = 0; i < e.changedTouches.length; i++) pressZone(e.changedTouches[i]);
+  }, { passive:false });
+  const lift = e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) liftZone(e.changedTouches[i]);
+  };
+  lanes.addEventListener('touchend', lift, { passive:false });
+  lanes.addEventListener('touchcancel', lift, { passive:false });
+
+  // swipe region (everything above the zones): one rotate per swipe,
+  // fired the moment the threshold is crossed, not on finger lift
+  const drags = new Map();         // touch id -> {x, y, done}
+  swipe.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++){
+      const t = e.changedTouches[i];
+      drags.set(t.identifier, { x:t.clientX, y:t.clientY, done:false });
+    }
+  }, { passive:false });
+  swipe.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++){
+      const t = e.changedTouches[i];
+      const d = drags.get(t.identifier);
+      if (!d || d.done) continue;
+      const dir = swipeDir(t.clientX - d.x, t.clientY - d.y, window.innerWidth);
+      if (dir){
+        d.done = true;
+        INPUT.emit(dir < 0 ? 'rotateLeft' : 'rotateRight');
+      }
+    }
+  }, { passive:false });
+  const endDrag = e => {
+    for (let i = 0; i < e.changedTouches.length; i++) drags.delete(e.changedTouches[i].identifier);
+  };
+  swipe.addEventListener('touchend', endDrag);
+  swipe.addEventListener('touchcancel', endDrag);
+
+  pauseBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    INPUT.emit('pause');
+  }, { passive:false });
+  pauseBtn.addEventListener('click', () => INPUT.emit('pause'));   // mouse only: touchstart ate the tap
+
+  // coarse-pointer detection happens at boot (main.js); the first real
+  // touch flips the UI for devices the media query missed
+  window.addEventListener('touchstart', () => {
+    if (!document.body.classList.contains('touch')){
+      setInputMode('touch');
+      buildTitle();
+    }
+  }, { once:true, passive:true });
+})();
 
 /* ---------------- HUD ---------------- */
 const ui = {
@@ -1651,17 +1869,27 @@ function updateRing(){
 function buildTitle(){
   document.getElementById('titlemeta').textContent =
     SONGS.length + ' SIGNALS DETECTED';
-  const L = CONFIG.inputLabels;
+  const L = CONFIG.inputLabels;   // active set — key or touch (V2 §3)
+  const laneKeys = L.laneGroup
+    ? '<kbd>' + L.laneGroup + '</kbd>'
+    : '<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>';
   const rows = [
-    ['<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>', 'HIT LANES'],
+    [laneKeys, 'HIT LANES'],
     ['<kbd>' + L.rotateLeft + '</kbd> <kbd>' + L.rotateRight + '</kbd>', 'ROTATE TUNNEL'],
     ['<kbd>' + L.pause + '</kbd>', 'PAUSE']
   ];
   document.getElementById('howto').innerHTML =
     rows.map(r => '<div class="keys">' + r[0] + '</div><div>' + r[1] + '</div>').join('');
-  document.getElementById('keyhints').innerHTML =
-    '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
-    '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+  document.getElementById('keyhints').innerHTML = L.laneGroup
+    ? '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>' +
+      '<span><b>' + L.pause + '</b> PAUSE</span>'
+    : '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
+      '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+  // tap-zone badges carry the same label set (empty in keyboard mode)
+  const badges = document.querySelectorAll('#tlanes .tlane i');
+  [L.lane0, L.lane1, L.lane2].forEach((label, i) => {
+    if (badges[i]) badges[i].textContent = L.laneGroup ? label : '';
+  });
 }
 
 /* ---------------- song select (V2 §2) ---------------- */
@@ -1831,6 +2059,9 @@ function frame(){
 applySettings();              // saved difficulty options before anything derives from them
 initScene();
 buildRingHud();
+// touch-first devices boot straight into the touch label set (V2 §3);
+// a later first touch can still flip a missed detection (see input.js)
+setInputMode(window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'key');
 buildTitle();
 selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){

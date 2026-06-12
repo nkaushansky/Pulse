@@ -96,17 +96,27 @@ function updateRing(){
 function buildTitle(){
   document.getElementById('titlemeta').textContent =
     SONGS.length + ' SIGNALS DETECTED';
-  const L = CONFIG.inputLabels;
+  const L = CONFIG.inputLabels;   // active set — key or touch (V2 §3)
+  const laneKeys = L.laneGroup
+    ? '<kbd>' + L.laneGroup + '</kbd>'
+    : '<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>';
   const rows = [
-    ['<kbd>' + L.lane0 + '</kbd><kbd>' + L.lane1 + '</kbd><kbd>' + L.lane2 + '</kbd> or <kbd>' + L.lanesAlt + '</kbd>', 'HIT LANES'],
+    [laneKeys, 'HIT LANES'],
     ['<kbd>' + L.rotateLeft + '</kbd> <kbd>' + L.rotateRight + '</kbd>', 'ROTATE TUNNEL'],
     ['<kbd>' + L.pause + '</kbd>', 'PAUSE']
   ];
   document.getElementById('howto').innerHTML =
     rows.map(r => '<div class="keys">' + r[0] + '</div><div>' + r[1] + '</div>').join('');
-  document.getElementById('keyhints').innerHTML =
-    '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
-    '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+  document.getElementById('keyhints').innerHTML = L.laneGroup
+    ? '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>' +
+      '<span><b>' + L.pause + '</b> PAUSE</span>'
+    : '<span><b>' + L.lane0 + ' ' + L.lane1 + ' ' + L.lane2 + '</b> LANES</span>' +
+      '<span><b>' + L.rotateLeft + ' \u00b7 ' + L.rotateRight + '</b> ROTATE</span>';
+  // tap-zone badges carry the same label set (empty in keyboard mode)
+  const badges = document.querySelectorAll('#tlanes .tlane i');
+  [L.lane0, L.lane1, L.lane2].forEach((label, i) => {
+    if (badges[i]) badges[i].textContent = L.laneGroup ? label : '';
+  });
 }
 
 /* ---------------- song select (V2 §2) ---------------- */

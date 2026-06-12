@@ -20,13 +20,13 @@ the next starts — keep that gate):
   flow is title → select → count-in; format change documented below.
 - **§6 Difficulty & feel options** — OPTIONS screen from select (O);
   see "Persistence" below for keys and the not-ranked rule.
+- **§3 Touch/mobile input** — touch backend in `src/input.js` (zero
+  game-logic change); see "Touch input" below. Chart density review:
+  both songs two-thumb playable as authored (no chart changes); the
+  bounds are enforced by `test/charts.test.js`.
 
 Remaining:
 
-- **§3 Touch/mobile input** — touch emitters into `INPUT.emit()` (zero
-  game-logic change), lane tap zones (min ~80px), swipe rotate,
-  responsive HUD via `CONFIG.inputLabels`, multi-touch, chart density
-  review on-device.
 - **§4 Latency calibration** — tap-along median offset (~16 taps) +
   manual nudge; applies to judgment only (never audio/visual
   scheduling); stored as a `SAVE` setting; suggest on first touch run.
@@ -35,14 +35,15 @@ Remaining:
 Process notes:
 
 - Work lands on the session work branch; `main` is fast-forwarded only
-  after the owner's play-test passes. At session end `main` was at §2
-  (`6227a0e`); §6 (`0df20ad`) awaited play-test on the work branch.
+  after the owner's play-test passes. §6 passed and `main` is at the
+  §6+docs line (`d3525e9`); §3 awaits play-test on the work branch.
 - This remote rejects tag pushes (branches only). Tags must be pushed
   from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
   567e3ca; git push origin v1 v2-foundation`.
 - Logic that can run outside the browser gets a Node test (stubbed
   `window`/`localStorage`) before pushing; song packages are validated
-  against the contract the same way.
+  against the contract the same way. Current suite:
+  `node test/touch.test.js && node test/charts.test.js`.
 
 ## Build
 
@@ -153,6 +154,36 @@ definitions; `applySettings()` maps `windowMode` onto `HIT_WINDOW` /
 `PERFECT_WINDOW` (perfect scales proportionally), and the speed
 multiplier applies inside `applySongTiming()` (tunnel speed only,
 never audio).
+
+## Touch input (V2 §3)
+
+Touch is a second emitter into `INPUT.emit()` — rule 2 applies in
+full: every touch event detail stays inside `src/input.js`. The layer:
+
+- `#touch` DOM (template) is gated by `body.touch`, set by
+  `setInputMode('touch'|'key')`: boot-time `(pointer: coarse)` check in
+  `main.js`, upgraded by the first real `touchstart` if missed. The
+  mode swap only repoints `CONFIG.inputLabels` at an entry of
+  `CONFIG.inputLabelSets` and toggles the body class — HUD text always
+  renders from `CONFIG.inputLabels` (rule 2), static prompts swap via
+  `.km`/`.tm` CSS classes.
+- Three lane tap zones = exact screen thirds, bottom `--tzone` high
+  (`max(80px, 33vh)` portrait / `26vh` landscape, + safe-area inset);
+  `touchLane()` maps `clientX` to lanes 0/1/2. Multi-touch: each
+  changed touch emits independently. The swipe region is everything
+  above the zones; `swipeDir()` (one rotate per swipe) and the round
+  `#tpause` button complete the gameplay set. All gameplay touches are
+  `preventDefault`ed non-passive + `touch-action:none` (no synthetic
+  clicks, zoom, scroll, pull-to-refresh).
+- Menus/flow are tap-first: song rows start the song (audio unlock
+  gesture), `OPTIONS`/`BACK`/`DONE`/`RETRY`/`SONG SELECT` buttons and
+  tap-to-resume on the pause overlay mirror the keyboard paths. The
+  old click-anywhere-to-retry on results was replaced by the buttons.
+- Bottom HUD (`#trackname`, `#energywrap`, `#keyhints`, `#judge`)
+  repositions above the zones under `body.touch`; overlays are
+  scroll-safe on short screens (flex spacer trick in `.overlay`).
+- Chart authoring bound for thumbs (enforced by `test/charts.test.js`):
+  ≤2 simultaneous lanes, ≥240 ms same-lane, ≥200 ms between any hits.
 
 ## Audio routing (V2 §1 — per-hit note audio)
 
