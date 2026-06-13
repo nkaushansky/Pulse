@@ -23,7 +23,13 @@ the next starts — keep that gate):
 - **§3 Touch/mobile input** — touch backend in `src/input.js` (zero
   game-logic change); see "Touch input" below. Chart density review:
   both songs two-thumb playable as authored (no chart changes); the
-  bounds are enforced by `test/charts.test.js`.
+  bounds are enforced by `test/charts.test.js`. Owner play-test landed
+  rotate buttons + portrait zone-to-hit-line; **landscape framing left
+  as-is by owner's call** (see "deferred" below).
+- **Run timer (post-spec)** — results screen shows the run length as
+  `M:SS` (`#r-time`); `formatTime()` in `src/game.js`, fed by `runSec`
+  captured off the master clock at `finish()` (song time, clamped to
+  the song on a clear). Display only — not saved, not ranked.
 
 Remaining:
 
@@ -32,18 +38,28 @@ Remaining:
   scheduling); stored as a `SAVE` setting; suggest on first touch run.
 - **Release** — tag, deploy `dist/pulse.html` to nk00.com.
 
+Deferred candidates (owner-acknowledged, not scheduled):
+
+- **Landscape tunnel framing** — owner wants the active wall to fill
+  the screen in landscape; impossible by zoom under the fixed-camera +
+  FOV rule (wide aspect → wide horizontal FOV → narrow active wedge;
+  zooming enough drops the hit zone out of frustum). Needs a camera
+  reframe (highway-style look just for landscape) + FOV re-validation.
+  Owner chose "leave it" for now; portrait frames the active path well.
+
 Process notes:
 
 - Work lands on the session work branch; `main` is fast-forwarded only
   after the owner's play-test passes. §6 passed and `main` is at the
-  §6+docs line (`d3525e9`); §3 awaits play-test on the work branch.
+  §6+docs line (`d3525e9`); the §3 + run-timer work is on the work
+  branch awaiting the owner's final play-test before the next ff.
 - This remote rejects tag pushes (branches only). Tags must be pushed
   from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
   567e3ca; git push origin v1 v2-foundation`.
 - Logic that can run outside the browser gets a Node test (stubbed
   `window`/`localStorage`) before pushing; song packages are validated
   against the contract the same way. Current suite:
-  `node test/touch.test.js && node test/charts.test.js`.
+  `node test/touch.test.js && node test/charts.test.js && node test/results.test.js`.
 
 ## Build
 

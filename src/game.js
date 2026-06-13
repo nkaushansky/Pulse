@@ -198,8 +198,17 @@ function rotate(dir){
   updateTrackLabel();
 }
 
+/* run duration as M:SS for the results screen */
+function formatTime(sec){
+  sec = Math.max(0, Math.floor(sec));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+
 function finish(kind){
   G.state = 'over';
+  // run length off the master clock, captured at the instant of finish:
+  // song time (post count-in) to here, clamped to the song on a clear
+  const runSec = Math.max(0, Math.min(nowSong(), SONG.meta.lengthBars * SPBAR));
   for (const tr of SONG.tracks){
     const g = tr._gain.gain, n = audio.ctx.currentTime;
     g.cancelScheduledValues(n);
@@ -225,6 +234,7 @@ function finish(kind){
   document.getElementById('r-acc').textContent = acc + '%';
   document.getElementById('r-caps').textContent = G.captures;
   document.getElementById('r-tracks').textContent = G.capturedTracks.size + ' / ' + SONG.tracks.length;
+  document.getElementById('r-time').textContent = formatTime(runSec);
   document.getElementById('r-mult').textContent = '\u00d7' + G.bestMult;
   // §6: runs with modified settings are tagged and never enter the
   // saved bests — default-settings records can't be displaced by them
