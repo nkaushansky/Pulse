@@ -140,6 +140,11 @@ function swipeDir(dx, dy, w){
   if (Math.abs(dx) < Math.max(36, w * 0.07)) return 0;
   return Math.abs(dx) > Math.abs(dy) * 1.3 ? (dx < 0 ? -1 : 1) : 0;
 }
+// one wall per swipe: collapse any extra emits (multi-touch jitter,
+// coalesced moves, fast re-flicks) within this window into a single
+// rotate. Pure + tested; clock is input ergonomics, not game timing.
+const SWIPE_COOLDOWN_MS = 250;
+function swipeCooldownOk(now, last, ms){ return now - last >= ms; }
 
 (function initTouchInput(){
   const lanes = document.getElementById('tlanes');
@@ -177,6 +182,7 @@ function swipeDir(dx, dy, w){
   // swipe region (everything above the zones): one rotate per swipe,
   // fired the moment the threshold is crossed, not on finger lift
   const drags = new Map();         // touch id -> {x, y, done}
+  let lastSwipeAt = -Infinity;     // gesture clock (ergonomics, not game timing)
   swipe.addEventListener('touchstart', e => {
     e.preventDefault();
     for (let i = 0; i < e.changedTouches.length; i++){
@@ -191,10 +197,12 @@ function swipeDir(dx, dy, w){
       const d = drags.get(t.identifier);
       if (!d || d.done) continue;
       const dir = swipeDir(t.clientX - d.x, t.clientY - d.y, window.innerWidth);
-      if (dir){
-        d.done = true;
-        INPUT.emit(dir < 0 ? 'rotateLeft' : 'rotateRight');
-      }
+      if (!dir) continue;
+      d.done = true;               // this finger has spent its one rotate
+      const now = performance.now();
+      if (!swipeCooldownOk(now, lastSwipeAt, SWIPE_COOLDOWN_MS)) continue;
+      lastSwipeAt = now;
+      INPUT.emit(dir < 0 ? 'rotateLeft' : 'rotateRight');
     }
   }, { passive:false });
   const endDrag = e => {

@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000004">
 <title>PULSE</title>
 <style>
   :root{
@@ -181,10 +185,10 @@
      never under 80px (thumb-sized). dvh, where supported, tracks the
      visible viewport under mobile browser chrome. */
   :root{--tzone:max(80px,33vh)}
-  @media (orientation:landscape){:root{--tzone:max(80px,26vh)}}
+  @media (orientation:landscape){:root{--tzone:max(80px,22vh)}}
   @supports (height:1dvh){
     :root{--tzone:max(80px,33dvh)}
-    @media (orientation:landscape){:root{--tzone:max(80px,26dvh)}}
+    @media (orientation:landscape){:root{--tzone:max(80px,22dvh)}}
   }
   /* mode prompts: .km shows in keyboard mode, .tm in touch mode */
   body.touch .km{display:none}
@@ -198,7 +202,7 @@
   .tlane{flex:1;position:relative;border-top:1px solid;border-left:1px solid;
     padding-top:8px;text-align:center}
   .tlane:last-child{border-right:1px solid}
-  .tlane i{font-style:normal;font-size:9px;letter-spacing:.3em;opacity:.5}
+  .tlane i{font-style:normal;font-size:9px;letter-spacing:.3em;opacity:.4}
   .tlane[data-lane="0"]{border-color:rgba(51,238,255,.35);color:var(--lane0);
     background:linear-gradient(rgba(51,238,255,.03),rgba(51,238,255,.12))}
   .tlane[data-lane="1"]{border-color:rgba(255,68,221,.35);color:var(--lane1);
@@ -209,7 +213,7 @@
   .tlane.press[data-lane="1"]{background:rgba(255,68,221,.30)}
   .tlane.press[data-lane="2"]{background:rgba(255,204,51,.30)}
   #tpause{position:fixed;z-index:16;width:46px;height:46px;border-radius:50%;
-    top:calc(96px + env(safe-area-inset-top,0px));
+    top:calc(110px + env(safe-area-inset-top,0px));
     right:calc(14px + env(safe-area-inset-right,0px));
     border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
     color:var(--ink);display:flex;align-items:center;justify-content:center;
@@ -217,16 +221,21 @@
   #tpause::before,#tpause::after{content:'';width:4px;height:16px;margin:0 3px;
     background:currentColor;box-shadow:0 0 6px rgba(120,200,255,.6)}
 
-  /* touch mode: bottom HUD clears the lane zones */
-  body.touch #keyhints{bottom:calc(var(--tzone) + 10px)}
-  body.touch #energywrap{bottom:calc(var(--tzone) + 34px)}
-  body.touch #trackname{bottom:calc(var(--tzone) + 62px)}
+  /* touch mode: redundant key-hint row is dropped (lane zones are
+     labeled, swipe area is the whole upper screen, pause is a button);
+     remaining bottom HUD clears the lane zones, and the status ring
+     grows so it stays readable — larger still in cramped landscape */
+  body.touch #keyhints{display:none}
+  body.touch #energywrap{bottom:calc(var(--tzone) + 16px)}
+  body.touch #trackname{bottom:calc(var(--tzone) + 42px)}
   body.touch #judge{bottom:auto;top:47%}
+  body.touch #ringwrap{width:88px;height:88px}
   body.touch .optrow .ov span{padding:12px 6px;margin:-12px -2px}
   @media (orientation:landscape){
-    body.touch #keyhints{display:none}
-    body.touch #energywrap{bottom:calc(var(--tzone) + 16px)}
-    body.touch #trackname{bottom:calc(var(--tzone) + 40px)}
+    body.touch #ringwrap{width:104px;height:104px}
+    body.touch #tpause{top:calc(124px + env(safe-area-inset-top,0px))}
+    body.touch #energywrap{bottom:calc(var(--tzone) + 12px)}
+    body.touch #trackname{bottom:calc(var(--tzone) + 34px)}
   }
 </style>
 </head>

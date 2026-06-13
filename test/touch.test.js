@@ -51,6 +51,11 @@ t('swipeDir(0, 80, 360)', 0, 'vertical drag is not a swipe');
 t('swipeDir(120, 60, 1290)', 1, 'threshold scales with screen width');
 t('swipeDir(80, 0, 1290)', 0, 'wide screen needs a longer swipe');
 
+// swipe cooldown collapses extra emits into one rotate per ~swipe
+t('swipeCooldownOk(1000, -Infinity, 250)', true, 'first swipe always fires');
+t('swipeCooldownOk(1000, 900, 250)', false, 'within cooldown: suppressed');
+t('swipeCooldownOk(1000, 700, 250)', true, 'past cooldown: allowed');
+
 // the keyboard label set stays the default contract
 t('CONFIG.inputLabels === CONFIG.inputLabelSets.key', true);
 t('CONFIG.inputLabelSets.touch.laneGroup.length > 0', true);
