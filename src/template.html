@@ -184,10 +184,10 @@
      Zone height: bottom third in portrait, shallower in landscape,
      never under 80px (thumb-sized). dvh, where supported, tracks the
      visible viewport under mobile browser chrome. */
-  :root{--tzone:max(80px,33vh)}
+  :root{--tzone:max(80px,20vh)}
   @media (orientation:landscape){:root{--tzone:max(80px,22vh)}}
   @supports (height:1dvh){
-    :root{--tzone:max(80px,33dvh)}
+    :root{--tzone:max(80px,20dvh)}
     @media (orientation:landscape){:root{--tzone:max(80px,22dvh)}}
   }
   /* mode prompts: .km shows in keyboard mode, .tm in touch mode */
@@ -221,13 +221,26 @@
   #tpause::before,#tpause::after{content:'';width:4px;height:16px;margin:0 3px;
     background:currentColor;box-shadow:0 0 6px rgba(120,200,255,.6)}
 
+  /* rotate buttons: one wall per tap, sat just above the left/right zones
+     (reliable discrete control alongside swipe) */
+  .trot{position:fixed;z-index:16;width:54px;height:54px;border-radius:50%;
+    bottom:calc(var(--tzone) + env(safe-area-inset-bottom,0px) + 12px);
+    align-items:center;justify-content:center;font-size:20px;
+    border:1px solid rgba(140,180,255,.5);background:rgba(20,30,60,.65);
+    color:var(--ink);display:none;touch-action:none;
+    box-shadow:0 0 10px rgba(80,140,255,.25)}
+  body.touch .trot{display:flex}
+  #trotL{left:calc(14px + env(safe-area-inset-left,0px))}
+  #trotR{right:calc(14px + env(safe-area-inset-right,0px))}
+
   /* touch mode: redundant key-hint row is dropped (lane zones are
      labeled, swipe area is the whole upper screen, pause is a button);
-     remaining bottom HUD clears the lane zones, and the status ring
-     grows so it stays readable — larger still in cramped landscape */
+     bottom HUD sits above the receptors/hit line — the zones now stop
+     at the hit line so the HUD is decoupled from the (shorter) zone.
+     Status ring grows so it stays readable, larger still in landscape */
   body.touch #keyhints{display:none}
-  body.touch #energywrap{bottom:calc(var(--tzone) + 16px)}
-  body.touch #trackname{bottom:calc(var(--tzone) + 42px)}
+  body.touch #energywrap{bottom:32vh}
+  body.touch #trackname{bottom:36vh}
   body.touch #judge{bottom:auto;top:47%}
   body.touch #ringwrap{width:88px;height:88px}
   body.touch .optrow .ov span{padding:12px 6px;margin:-12px -2px}
@@ -263,6 +276,8 @@
 <div id="touch">
   <div id="tswipe"></div>
   <div id="tpause"></div>
+  <div id="trotL" class="trot">&#9664;</div>
+  <div id="trotR" class="trot">&#9654;</div>
   <div id="tlanes">
     <div class="tlane" data-lane="0"><i></i></div>
     <div class="tlane" data-lane="1"><i></i></div>

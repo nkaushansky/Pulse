@@ -217,6 +217,14 @@ function swipeCooldownOk(now, last, ms){ return now - last >= ms; }
   }, { passive:false });
   pauseBtn.addEventListener('click', () => INPUT.emit('pause'));   // mouse only: touchstart ate the tap
 
+  // rotate buttons: exactly one wall per tap, no gesture ambiguity
+  function bindRotate(el, action){
+    el.addEventListener('touchstart', e => { e.preventDefault(); INPUT.emit(action); }, { passive:false });
+    el.addEventListener('click', () => INPUT.emit(action));        // mouse only
+  }
+  bindRotate(document.getElementById('trotL'), 'rotateLeft');
+  bindRotate(document.getElementById('trotR'), 'rotateRight');
+
   // coarse-pointer detection happens at boot (main.js); the first real
   // touch flips the UI for devices the media query missed
   window.addEventListener('touchstart', () => {

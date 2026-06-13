@@ -168,20 +168,32 @@ full: every touch event detail stays inside `src/input.js`. The layer:
   renders from `CONFIG.inputLabels` (rule 2), static prompts swap via
   `.km`/`.tm` CSS classes.
 - Three lane tap zones = exact screen thirds, bottom `--tzone` high
-  (`max(80px, 33vh)` portrait / `26vh` landscape, + safe-area inset);
-  `touchLane()` maps `clientX` to lanes 0/1/2. Multi-touch: each
-  changed touch emits independently. The swipe region is everything
-  above the zones; `swipeDir()` (one rotate per swipe) and the round
-  `#tpause` button complete the gameplay set. All gameplay touches are
-  `preventDefault`ed non-passive + `touch-action:none` (no synthetic
-  clicks, zoom, scroll, pull-to-refresh).
+  (`max(80px, 20vh)` portrait / `22vh` landscape, + safe-area inset),
+  i.e. the zone reaches up to the hit line, no further; `touchLane()`
+  maps `clientX` to lanes 0/1/2. Multi-touch: each changed touch emits
+  independently.
+- Rotation has two backends, both one-wall-per-action: the round
+  `#trotL`/`#trotR` buttons just above the left/right zones (one tap =
+  one hop — the reliable, precise control) and a swipe in the region
+  above the zones (`swipeDir()`, debounced by `swipeCooldownOk()` /
+  `SWIPE_COOLDOWN_MS` so a single flick / multi-touch jitter can't
+  over-rotate). The round `#tpause` button is the third control. All
+  gameplay touches are `preventDefault`ed non-passive +
+  `touch-action:none` (no synthetic clicks, zoom, scroll,
+  pull-to-refresh). NB: cycling past the first/last track is one logical
+  step but a wide visual swing (tracks sit on adjacent walls spanning
+  <180°); that's `rotate()` game logic, untouched by §3.
 - Menus/flow are tap-first: song rows start the song (audio unlock
   gesture), `OPTIONS`/`BACK`/`DONE`/`RETRY`/`SONG SELECT` buttons and
   tap-to-resume on the pause overlay mirror the keyboard paths. The
   old click-anywhere-to-retry on results was replaced by the buttons.
-- Bottom HUD (`#trackname`, `#energywrap`, `#keyhints`, `#judge`)
-  repositions above the zones under `body.touch`; overlays are
-  scroll-safe on short screens (flex spacer trick in `.overlay`).
+- Bottom HUD: `#keyhints` is hidden in touch (redundant); `#trackname`
+  and `#energywrap` are decoupled from `--tzone` and pinned above the
+  receptors (the shorter zone would otherwise collide with them);
+  `#judge` moves to mid-screen; the status ring grows (`88px`, `104px`
+  landscape). Overlays stay scroll-safe on short screens (flex spacer
+  trick in `.overlay`); mobile-web-app metas enable fullscreen via
+  Add-to-Home-Screen.
 - Chart authoring bound for thumbs (enforced by `test/charts.test.js`):
   ≤2 simultaneous lanes, ≥240 ms same-lane, ≥200 ms between any hits.
 
