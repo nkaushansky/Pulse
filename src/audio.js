@@ -24,6 +24,20 @@ function initAudio(){
   if (SONG) initSongAudio(SONG);
 }
 
+/* iOS unlock: the first WebAudio voice after an AudioContext resume can have
+   its attack swallowed until the audio hardware is fully awake. Play one
+   silent (single-frame) buffer on the start gesture so the very first real
+   note sounds in full. Idempotent — only the first call does anything. */
+let audioWarmed = false;
+function warmUpAudio(){
+  if (audioWarmed || !audio.ctx) return;
+  audioWarmed = true;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = audio.ctx.createBuffer(1, 1, audio.ctx.sampleRate);
+  src.connect(audio.ctx.destination);
+  src.start(0);
+}
+
 /* Per-track buses for a song package; idempotent, called on selection
    (songs can be selected before the user-gesture AudioContext exists). */
 function initSongAudio(song){

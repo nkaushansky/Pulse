@@ -36,6 +36,12 @@ const INSTRUMENTS = {
                 attack:0.001, decay:0.07, sustain:0, gain:0.5 },
   pulseTick:  { type:'noise', filter:{type:'highpass',freq:9500,q:0.7},
                 attack:0.0005, decay:0.018, sustain:0, gain:0.9 },
+  // non-musical tap acknowledgment for 'dead'/'miss' presses (early-tap
+  // feedback): a soft mid click on hitBus so every tap is heard even after
+  // a phrase breaks — bandpass mid reads as a UI click, distinct from the
+  // hats (highpass noise) and the low break buzz, and never the note bus
+  tapTick:    { type:'noise', filter:{type:'bandpass',freq:2500,q:0.9},
+                attack:0.0005, decay:0.03, sustain:0, gain:0.25 },
   // gentler palette for the easy song (V2 §2)
   kickSoft:   { type:'osc', wave:'sine', pitchEnv:{start:120,end:40,time:0.12},
                 attack:0.004, decay:0.30, sustain:0, gain:0.85 },

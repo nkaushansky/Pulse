@@ -10,6 +10,13 @@ function showJudge(text, color){
 // fires on EVERY lane keypress: kind = perfect | good | miss | dead
 // good carries offSec (signed: negative = early, positive = late)
 function pressFeedback(lane, kind, offSec){
+  // every tap is acknowledged: correct hits already sound the note via
+  // playHitNote, so 'dead'/'miss' presses get a subtle non-musical tick
+  // here (feedback bus, never the note bus) — otherwise taps go silent for
+  // the rest of a broken phrase. Centralized so all backends inherit it.
+  if ((kind === 'dead' || kind === 'miss') && audio.ctx){
+    playVoice('tapTick', audio.ctx.currentTime + 0.005, 60, 0.04, audio.hitBus);
+  }
   const wr = SONG.tracks[G.activeIdx]._wr;
   if (!wr) return;
   const FB = { perfect:0xffffff, good:LANE_COLORS[lane], miss:0xff3355, dead:0x6b7385 };

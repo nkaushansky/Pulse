@@ -116,6 +116,7 @@ function startGame(){
   appState = 'running';
   ui.select.classList.add('hidden');
   if (!audio.ctx) initAudio();     // first user gesture lands here
+  warmUpAudio();                   // iOS: wake the audio hardware on the gesture
   initSongAudio(SONG);
   audio.ctx.resume().then(() => {
     if (!schedTimer) schedTimer = setInterval(schedulerTick, 25);

@@ -532,6 +532,12 @@ const INSTRUMENTS = {
                 attack:0.001, decay:0.07, sustain:0, gain:0.5 },
   pulseTick:  { type:'noise', filter:{type:'highpass',freq:9500,q:0.7},
                 attack:0.0005, decay:0.018, sustain:0, gain:0.9 },
+  // non-musical tap acknowledgment for 'dead'/'miss' presses (early-tap
+  // feedback): a soft mid click on hitBus so every tap is heard even after
+  // a phrase breaks — bandpass mid reads as a UI click, distinct from the
+  // hats (highpass noise) and the low break buzz, and never the note bus
+  tapTick:    { type:'noise', filter:{type:'bandpass',freq:2500,q:0.9},
+                attack:0.0005, decay:0.03, sustain:0, gain:0.25 },
   // gentler palette for the easy song (V2 §2)
   kickSoft:   { type:'osc', wave:'sine', pitchEnv:{start:120,end:40,time:0.12},
                 attack:0.004, decay:0.30, sustain:0, gain:0.85 },
@@ -788,6 +794,20 @@ function initAudio(){
   audio.ctx = ctx; audio.master = master; audio.hitBus = hitBus;
   audio.noteBus = noteBus; audio.pulseBus = pulseBus; audio.noiseBuf = buf;
   if (SONG) initSongAudio(SONG);
+}
+
+/* iOS unlock: the first WebAudio voice after an AudioContext resume can have
+   its attack swallowed until the audio hardware is fully awake. Play one
+   silent (single-frame) buffer on the start gesture so the very first real
+   note sounds in full. Idempotent — only the first call does anything. */
+let audioWarmed = false;
+function warmUpAudio(){
+  if (audioWarmed || !audio.ctx) return;
+  audioWarmed = true;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = audio.ctx.createBuffer(1, 1, audio.ctx.sampleRate);
+  src.connect(audio.ctx.destination);
+  src.start(0);
 }
 
 /* Per-track buses for a song package; idempotent, called on selection
@@ -1295,6 +1315,13 @@ function showJudge(text, color){
 // fires on EVERY lane keypress: kind = perfect | good | miss | dead
 // good carries offSec (signed: negative = early, positive = late)
 function pressFeedback(lane, kind, offSec){
+  // every tap is acknowledged: correct hits already sound the note via
+  // playHitNote, so 'dead'/'miss' presses get a subtle non-musical tick
+  // here (feedback bus, never the note bus) — otherwise taps go silent for
+  // the rest of a broken phrase. Centralized so all backends inherit it.
+  if ((kind === 'dead' || kind === 'miss') && audio.ctx){
+    playVoice('tapTick', audio.ctx.currentTime + 0.005, 60, 0.04, audio.hitBus);
+  }
   const wr = SONG.tracks[G.activeIdx]._wr;
   if (!wr) return;
   const FB = { perfect:0xffffff, good:LANE_COLORS[lane], miss:0xff3355, dead:0x6b7385 };
@@ -1703,6 +1730,7 @@ function startGame(){
   appState = 'running';
   ui.select.classList.add('hidden');
   if (!audio.ctx) initAudio();     // first user gesture lands here
+  warmUpAudio();                   // iOS: wake the audio hardware on the gesture
   initSongAudio(SONG);
   audio.ctx.resume().then(() => {
     if (!schedTimer) schedTimer = setInterval(schedulerTick, 25);

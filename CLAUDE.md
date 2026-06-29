@@ -30,20 +30,17 @@ the next starts — keep that gate):
   `M:SS` (`#r-time`); `formatTime()` in `src/game.js`, fed by `runSec`
   captured off the master clock at `finish()` (song time, clamped to
   the song on a clear). Display only — not saved, not ranked.
+- **Early-tap audio feedback (feel follow-up to §1)** — a subtle
+  non-musical `tapTick` on `'dead'`/`'miss'` presses, centralized in
+  `pressFeedback` (`src/hitzone.js`) so all input backends inherit it and
+  it stays off `'good'`/`'perfect'` (those already sound the note via
+  `playHitNote`). Plus an iOS AudioContext warm-up (`warmUpAudio()`, a
+  silent single-frame buffer fired on the start gesture). See "Audio
+  routing" below. **On the work branch awaiting the owner's phone
+  play-test before the next ff.**
 
 Remaining:
 
-- **Early-tap audio feedback (feel follow-up to §1) — next up.** Per-press
-  audio only fires on a correct hit (`playHitNote`) or the single break
-  (`breakBuzz`). After a phrase breaks, every further tap in it routes to
-  `pressFeedback(…, 'dead')` in `onLaneInput` (`src/game.js`), which is
-  visual-only — so taps go silent for the rest of a broken phrase, worst
-  on mobile when you break in the first tap or two. Fix: a subtle
-  non-musical tick on `'dead'`/`'miss'` presses so every tap is
-  acknowledged (centralize in `pressFeedback`, keep it off `'good'`/
-  `'perfect'` which already sound the note); also consider an iOS
-  AudioContext warm-up (silent buffer on the start gesture) so the first
-  sounds aren't swallowed. Owner-reported; needs a device play-test.
 - **§4 Latency calibration** — tap-along median offset (~16 taps) +
   manual nudge; applies to judgment only (never audio/visual
   scheduling); stored as a `SAVE` setting; suggest on first touch run.
@@ -67,9 +64,10 @@ Deferred candidates (owner-acknowledged, not scheduled):
 Process notes:
 
 - Work lands on the session work branch; `main` is fast-forwarded only
-  after the owner's play-test passes. §6 passed and `main` is at the
-  §6+docs line (`d3525e9`); the §3 + run-timer work is on the work
-  branch awaiting the owner's final play-test before the next ff.
+  after the owner's play-test passes. §3 + the run-timer passed and
+  `main` is at that line (`7e7873d`); the early-tap audio feedback fix
+  is on the work branch awaiting the owner's phone play-test before the
+  next ff (then §4 calibration, then release).
 - This remote rejects tag pushes (branches only). Tags must be pushed
   from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
   567e3ca; git push origin v1 v2-foundation`.
@@ -235,7 +233,7 @@ full: every touch event detail stays inside `src/input.js`. The layer:
 A gem hit on an uncaptured track performs the track's **actual pattern
 content at that grid step** — the full slice (chords, layered drums) —
 via `playHitNote()` into `audio.noteBus` (gain 1.0, i.e. exactly the
-captured-stem level; `hitBus` at 0.9 now carries only break feedback).
+captured-stem level; `hitBus` at 0.9 carries break feedback + the tap tick).
 Backing pattern events are scheduled **only when their phrase is inside
 a captured window** (`scheduleStep`): never schedule events into a muted
 `tr._gain` "just in case" — a muted-scheduled voice becomes an audible
@@ -243,4 +241,13 @@ attack/tail bleed (double trigger) when a capture lands inside the
 scheduler lookahead. Uncaptured events near now are recorded in
 `tr._skipped`; `flushSkippedEvents()` replays the still-future ones at
 capture time, excluding steps the player's own hits just performed.
-Misses and empty-lane presses stay non-musical.
+
+Misses and empty-lane presses stay non-musical, but they are still
+*acknowledged*: `pressFeedback` (`src/hitzone.js`) plays a soft
+non-musical `tapTick` on every `'dead'`/`'miss'` press (into `hitBus`,
+never `noteBus`), so taps aren't silent for the rest of a broken phrase.
+It is deliberately off `'good'`/`'perfect'`, which already sound the note
+via `playHitNote`, so it can never overlap or muddy the per-hit note
+audio. `warmUpAudio()` (`src/audio.js`) plays one silent single-frame
+buffer on the start gesture (iOS unlock) so the first real note after
+`ctx.resume()` isn't swallowed.
