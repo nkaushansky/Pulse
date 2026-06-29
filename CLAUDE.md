@@ -33,6 +33,17 @@ the next starts — keep that gate):
 
 Remaining:
 
+- **Early-tap audio feedback (feel follow-up to §1) — next up.** Per-press
+  audio only fires on a correct hit (`playHitNote`) or the single break
+  (`breakBuzz`). After a phrase breaks, every further tap in it routes to
+  `pressFeedback(…, 'dead')` in `onLaneInput` (`src/game.js`), which is
+  visual-only — so taps go silent for the rest of a broken phrase, worst
+  on mobile when you break in the first tap or two. Fix: a subtle
+  non-musical tick on `'dead'`/`'miss'` presses so every tap is
+  acknowledged (centralize in `pressFeedback`, keep it off `'good'`/
+  `'perfect'` which already sound the note); also consider an iOS
+  AudioContext warm-up (silent buffer on the start gesture) so the first
+  sounds aren't swallowed. Owner-reported; needs a device play-test.
 - **§4 Latency calibration** — tap-along median offset (~16 taps) +
   manual nudge; applies to judgment only (never audio/visual
   scheduling); stored as a `SAVE` setting; suggest on first touch run.
@@ -46,6 +57,12 @@ Deferred candidates (owner-acknowledged, not scheduled):
   zooming enough drops the hit zone out of frustum). Needs a camera
   reframe (highway-style look just for landscape) + FOV re-validation.
   Owner chose "leave it" for now; portrait frames the active path well.
+- **Mobile expansion (future)** — accelerometer/tilt to switch the
+  active wall (experimental; must not fight deliberate play — gate
+  behind a setting and validate against the buttons/swipe); haptic
+  feedback via the Vibration API on zone tap and on gem hit. Haptics
+  would also give tactile confirmation that complements the early-tap
+  audio fix above (a tap you can feel even mid-broken-phrase).
 
 Process notes:
 
