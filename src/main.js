@@ -70,6 +70,7 @@ buildRingHud();
 // a later first touch can still flip a missed detection (see input.js)
 setInputMode(window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'key');
 buildTitle();
+initCalibrate();              // wire the §4 calibration screen controls
 selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){
   for (let w = 0; w < WALL_COUNT; w++){

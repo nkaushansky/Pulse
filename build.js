@@ -26,6 +26,7 @@ const MODULES = [
   'game.js',        // game state G + rules (capture, break, judge, finish)
   'input.js',       // semantic input layer + keyboard backend + flow events
   'hud.js',         // DOM HUD, status ring, title screen
+  'calibrate.js',   // latency calibration screen (V2 §4)
   'main.js'         // rAF loop (visuals only) + boot
 ];
 

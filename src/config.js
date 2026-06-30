@@ -19,10 +19,16 @@ let HIT_WINDOW = 0.090;
 let PERFECT_WINDOW = 0.040;
 const WINDOW_PRESETS = { strict:0.070, normal:0.090, relaxed:0.120 };
 
+/* §4 latency calibration: a signed offset (seconds) that shifts JUDGMENT
+   timing only — never audio or visual scheduling. 0 reproduces V1 feel.
+   Stored as integer ms under the `calibrationMs` setting; loaded here. */
+let CALIB_OFFSET = 0;
+
 function applySettings(){
   const wm = SAVE.getSetting('windowMode', 'normal');
   HIT_WINDOW = WINDOW_PRESETS[wm] || WINDOW_PRESETS.normal;
   PERFECT_WINDOW = 0.040 * (HIT_WINDOW / 0.090);   // scales proportionally
+  CALIB_OFFSET = (SAVE.getSetting('calibrationMs', 0) || 0) / 1000;
 }
 
 let BPM = 120;

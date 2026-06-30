@@ -173,6 +173,28 @@
   #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
     letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
 
+  /* ---------- latency calibration (V2 §4) ---------- */
+  #calibprompt{z-index:30}
+  #calibprompt .cpmsg{line-height:1.8;max-width:34em}
+  #calibtap{margin-top:24px;width:min(82vw,440px);height:clamp(110px,20vh,170px);
+    border:1px solid rgba(120,160,255,.4);background:rgba(20,30,60,.4);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    font-size:clamp(13px,1.8vw,17px);letter-spacing:.35em;color:var(--ink);
+    touch-action:none;-webkit-user-select:none;user-select:none}
+  #calibtap.flash{background:rgba(120,200,255,.32);border-color:#fff;
+    box-shadow:0 0 22px rgba(120,200,255,.4)}
+  .calibread{margin-top:18px;font-size:clamp(12px,1.6vw,15px);letter-spacing:.2em;
+    color:var(--dim)}
+  #calib-measured{color:var(--lane0);text-shadow:0 0 10px rgba(51,238,255,.5)}
+  .calibval{margin-top:16px;display:flex;align-items:center;gap:18px}
+  .calibval .nudge{width:48px;height:48px;border-radius:8px;
+    border:1px solid rgba(140,180,255,.5);background:rgba(20,30,60,.6);color:#fff;
+    font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .calibval .nudge:hover{border-color:#fff;box-shadow:0 0 12px rgba(120,200,255,.35)}
+  #calib-value{min-width:110px;text-align:center;font-size:clamp(18px,2.4vw,26px);
+    font-weight:700;letter-spacing:.1em;color:var(--lane2);
+    text-shadow:0 0 12px rgba(255,204,51,.6)}
+
   /* ---------- overlay buttons (mouse + touch) ---------- */
   .btnrow{margin-top:26px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .obtn{border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
@@ -310,12 +332,45 @@
   <div class="gametitle selecttitle">OPTIONS</div>
   <div id="optlist"></div>
   <div class="btnrow">
+    <div class="obtn" id="btn-calibrate">CALIBRATE</div>
     <div class="obtn" id="btn-done">DONE</div>
   </div>
-  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; C CALIBRATE &middot; ESC BACK<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
   <div class="footnote tm">TAP A VALUE TO SET IT<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
+</div>
+
+<div id="calib" class="overlay hidden">
+  <div class="gametitle selecttitle">CALIBRATE LATENCY</div>
+  <div class="subtitle">TAP ON EACH TICK</div>
+  <div id="calibtap">TAP HERE</div>
+  <div class="calibread"><span id="calib-count">0 / 16</span> &middot;
+    <span id="calib-measured">TAP ON EACH TICK</span></div>
+  <div class="calibval">
+    <div class="nudge" id="calib-minus">&minus;</div>
+    <div id="calib-value">+0 ms</div>
+    <div class="nudge" id="calib-plus">+</div>
+  </div>
+  <div class="btnrow">
+    <div class="obtn" id="calib-restart">RESTART</div>
+    <div class="obtn" id="calib-save">SAVE</div>
+    <div class="obtn" id="calib-cancel">CANCEL</div>
+  </div>
+  <div class="footnote km">SPACE TAP &middot; &larr; &rarr; NUDGE 5ms &middot; ENTER SAVE &middot; ESC CANCEL</div>
+  <div class="footnote tm">TAP THE PAD ON EACH TICK &middot; &minus; / + NUDGE &middot; SAVE WHEN DONE</div>
+  <div class="footnote">OFFSET APPLIES TO JUDGMENT ONLY &middot; + MEANS YOU TAP LATE</div>
+</div>
+
+<div id="calibprompt" class="overlay hidden">
+  <div class="gametitle selecttitle">CALIBRATE?</div>
+  <div class="subtitle cpmsg">TOUCH SCREENS ADD A LITTLE INPUT LATENCY.<br>
+    A QUICK TAP-ALONG MAKES JUDGMENT ACCURATE.</div>
+  <div class="btnrow">
+    <div class="obtn" id="cp-yes">CALIBRATE NOW</div>
+    <div class="obtn" id="cp-skip">SKIP</div>
+  </div>
+  <div class="footnote">YOU CAN ALWAYS RECALIBRATE FROM OPTIONS</div>
 </div>
 
 <div id="pause" class="overlay hidden">

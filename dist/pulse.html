@@ -173,6 +173,28 @@
   #r-mods{margin:-14px 0 22px;font-size:clamp(10px,1.4vw,13px);
     letter-spacing:.25em;color:var(--lane2);text-shadow:0 0 10px rgba(255,204,51,.6)}
 
+  /* ---------- latency calibration (V2 §4) ---------- */
+  #calibprompt{z-index:30}
+  #calibprompt .cpmsg{line-height:1.8;max-width:34em}
+  #calibtap{margin-top:24px;width:min(82vw,440px);height:clamp(110px,20vh,170px);
+    border:1px solid rgba(120,160,255,.4);background:rgba(20,30,60,.4);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    font-size:clamp(13px,1.8vw,17px);letter-spacing:.35em;color:var(--ink);
+    touch-action:none;-webkit-user-select:none;user-select:none}
+  #calibtap.flash{background:rgba(120,200,255,.32);border-color:#fff;
+    box-shadow:0 0 22px rgba(120,200,255,.4)}
+  .calibread{margin-top:18px;font-size:clamp(12px,1.6vw,15px);letter-spacing:.2em;
+    color:var(--dim)}
+  #calib-measured{color:var(--lane0);text-shadow:0 0 10px rgba(51,238,255,.5)}
+  .calibval{margin-top:16px;display:flex;align-items:center;gap:18px}
+  .calibval .nudge{width:48px;height:48px;border-radius:8px;
+    border:1px solid rgba(140,180,255,.5);background:rgba(20,30,60,.6);color:#fff;
+    font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .calibval .nudge:hover{border-color:#fff;box-shadow:0 0 12px rgba(120,200,255,.35)}
+  #calib-value{min-width:110px;text-align:center;font-size:clamp(18px,2.4vw,26px);
+    font-weight:700;letter-spacing:.1em;color:var(--lane2);
+    text-shadow:0 0 12px rgba(255,204,51,.6)}
+
   /* ---------- overlay buttons (mouse + touch) ---------- */
   .btnrow{margin-top:26px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .obtn{border:1px solid rgba(140,180,255,.45);background:rgba(20,30,60,.6);
@@ -310,12 +332,45 @@
   <div class="gametitle selecttitle">OPTIONS</div>
   <div id="optlist"></div>
   <div class="btnrow">
+    <div class="obtn" id="btn-calibrate">CALIBRATE</div>
     <div class="obtn" id="btn-done">DONE</div>
   </div>
-  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; ESC BACK<br>
+  <div class="footnote km">&uarr; &darr; OPTION &middot; &larr; &rarr; CHANGE &middot; C CALIBRATE &middot; ESC BACK<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
   <div class="footnote tm">TAP A VALUE TO SET IT<br>
     NON-DEFAULT SETTINGS ARE TAGGED ON RESULTS AND DO NOT RANK</div>
+</div>
+
+<div id="calib" class="overlay hidden">
+  <div class="gametitle selecttitle">CALIBRATE LATENCY</div>
+  <div class="subtitle">TAP ON EACH TICK</div>
+  <div id="calibtap">TAP HERE</div>
+  <div class="calibread"><span id="calib-count">0 / 16</span> &middot;
+    <span id="calib-measured">TAP ON EACH TICK</span></div>
+  <div class="calibval">
+    <div class="nudge" id="calib-minus">&minus;</div>
+    <div id="calib-value">+0 ms</div>
+    <div class="nudge" id="calib-plus">+</div>
+  </div>
+  <div class="btnrow">
+    <div class="obtn" id="calib-restart">RESTART</div>
+    <div class="obtn" id="calib-save">SAVE</div>
+    <div class="obtn" id="calib-cancel">CANCEL</div>
+  </div>
+  <div class="footnote km">SPACE TAP &middot; &larr; &rarr; NUDGE 5ms &middot; ENTER SAVE &middot; ESC CANCEL</div>
+  <div class="footnote tm">TAP THE PAD ON EACH TICK &middot; &minus; / + NUDGE &middot; SAVE WHEN DONE</div>
+  <div class="footnote">OFFSET APPLIES TO JUDGMENT ONLY &middot; + MEANS YOU TAP LATE</div>
+</div>
+
+<div id="calibprompt" class="overlay hidden">
+  <div class="gametitle selecttitle">CALIBRATE?</div>
+  <div class="subtitle cpmsg">TOUCH SCREENS ADD A LITTLE INPUT LATENCY.<br>
+    A QUICK TAP-ALONG MAKES JUDGMENT ACCURATE.</div>
+  <div class="btnrow">
+    <div class="obtn" id="cp-yes">CALIBRATE NOW</div>
+    <div class="obtn" id="cp-skip">SKIP</div>
+  </div>
+  <div class="footnote">YOU CAN ALWAYS RECALIBRATE FROM OPTIONS</div>
 </div>
 
 <div id="pause" class="overlay hidden">
@@ -368,10 +423,16 @@ let HIT_WINDOW = 0.090;
 let PERFECT_WINDOW = 0.040;
 const WINDOW_PRESETS = { strict:0.070, normal:0.090, relaxed:0.120 };
 
+/* §4 latency calibration: a signed offset (seconds) that shifts JUDGMENT
+   timing only — never audio or visual scheduling. 0 reproduces V1 feel.
+   Stored as integer ms under the `calibrationMs` setting; loaded here. */
+let CALIB_OFFSET = 0;
+
 function applySettings(){
   const wm = SAVE.getSetting('windowMode', 'normal');
   HIT_WINDOW = WINDOW_PRESETS[wm] || WINDOW_PRESETS.normal;
   PERFECT_WINDOW = 0.040 * (HIT_WINDOW / 0.090);   // scales proportionally
+  CALIB_OFFSET = (SAVE.getSetting('calibrationMs', 0) || 0) / 1000;
 }
 
 let BPM = 120;
@@ -1350,6 +1411,12 @@ function pressFeedback(lane, kind, offSec){
 let G = null;
 
 function nowSong(){ return audio.ctx.currentTime - G.songStart; }
+/* §4: the judgment clock is the master clock shifted by the saved latency
+   offset. Used ONLY for hit/miss timing — never visuals, audio scheduling,
+   or the phrase index — so a tap that lands `offset` from a gem (the
+   player's systematic input latency) is judged as on-time. */
+function applyCalibration(songTime){ return songTime - CALIB_OFFSET; }
+function judgeNow(){ return applyCalibration(nowSong()); }
 function phraseStartTime(p){ return G.songStart + p * PHRASE_SEC; }
 
 function newGame(){
@@ -1398,7 +1465,7 @@ function setupAttempt(p, fresh){
   let valid = !captured && gems.length > 0;
   if (valid && !fresh){
     // rotated in mid-phrase: only valid if nothing already slipped past
-    const t = nowSong();
+    const t = judgeNow();            // §4: judge slipped-past on the calibrated clock
     valid = gems.every(g => g.hit || g.time >= t - HIT_WINDOW);
   }
   const hits = gems.reduce((n, g) => n + (g.hit ? 1 : 0), 0);
@@ -1474,7 +1541,8 @@ function captureTrack(tr, p){
 function onLaneInput(lane){
   if (!G || G.state !== 'playing') return;
   const tr = SONG.tracks[G.activeIdx];
-  const t = nowSong();
+  const t = nowSong();               // visual/phrase clock (drives p + attempt logic)
+  const tj = judgeNow();             // §4: gem timing judged on the calibrated clock
   const p = Math.max(0, Math.floor(t / PHRASE_SEC));
   // candidates in this phrase and the next (early hits across the boundary)
   let best = null, bestDt = Infinity;
@@ -1483,7 +1551,7 @@ function onLaneInput(lane){
     if (!gems || (ph !== p && isCaptured(tr, ph))) continue;
     for (const gem of gems){
       if (gem.lane !== lane || gem.hit || gem.missed) continue;
-      const dt = Math.abs(gem.time - t);
+      const dt = Math.abs(gem.time - tj);
       if (dt <= HIT_WINDOW && dt < bestDt){ best = gem; bestDt = dt; }
     }
   }
@@ -1494,7 +1562,7 @@ function onLaneInput(lane){
       return;
     }
     best.hit = true;
-    const off = t - best.time;       // signed: negative = early, positive = late
+    const off = tj - best.time;      // signed: negative = early, positive = late
     const perfect = bestDt <= PERFECT_WINDOW;
     G.score += (perfect ? 200 : 100) * G.mult;
     G.hits++;
@@ -1522,9 +1590,10 @@ function missCheck(t, p){
   const tr = SONG.tracks[G.activeIdx];
   const gems = tr._byPhrase[p];
   if (!gems) return;
-  for (const gem of gems){
+  const tj = applyCalibration(t);    // §4: miss boundary on the calibrated clock,
+  for (const gem of gems){           //     so it matches the (shifted) hit window
     if (gem.hit || gem.missed || isCaptured(tr, p)) continue;
-    if (gem.time < t - HIT_WINDOW){
+    if (gem.time < tj - HIT_WINDOW){
       gem.missed = true;
       G.misses++;
       if (gem.mesh) gem.mesh.material = gemMats.miss;
@@ -1646,7 +1715,16 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'ArrowDown') moveOptSel(1);
     else if (e.code === 'ArrowLeft') changeOpt(-1);
     else if (e.code === 'ArrowRight') changeOpt(1);
+    else if (e.code === 'KeyC') enterCalibrate();
     else if (e.code === 'Escape' || e.code === 'KeyO' || e.code === 'Enter') enterSelect();
+    return;
+  }
+  if (appState === 'calibrate'){
+    if (e.code === 'Space') calibTap();             // tap along the tick
+    else if (e.code === 'ArrowLeft') calibNudge(-5);
+    else if (e.code === 'ArrowRight') calibNudge(5);
+    else if (e.code === 'Enter' || e.code === 'NumpadEnter') exitCalibrate(true);
+    else if (e.code === 'Escape') exitCalibrate(false);
     return;
   }
   if (appState === 'over' || (G && G.state === 'over')){
@@ -1671,6 +1749,9 @@ document.getElementById('btn-select').addEventListener('click', () => {
 document.getElementById('btn-options').addEventListener('click', () => {
   if (appState === 'select') enterSettings();
 });
+document.getElementById('btn-calibrate').addEventListener('click', () => {
+  if (appState === 'settings') enterCalibrate();
+});
 document.getElementById('btn-back').addEventListener('click', () => {
   if (appState === 'select') backToTitle();
 });
@@ -1688,6 +1769,7 @@ function enterSelect(){
   ui.settings.classList.add('hidden');
   buildSelect();
   ui.select.classList.remove('hidden');
+  maybeSuggestCalibration();       // §4: one-time prompt on first touch run
 }
 
 function enterSettings(){
@@ -2070,6 +2152,151 @@ function setOption(o, v){
   if (SONG) selectSong(SONG);   // refresh speed + zone-band geometry, no restart needed
   buildSettings();
 }
+/* ---------------- latency calibration (V2 §4) ----------------
+   A tap-along screen: a steady tick plays on the master clock; the player
+   taps each beat; the median signed offset over ~16 taps becomes the saved
+   calibration, with a manual +/- ms nudge. The offset is applied to
+   JUDGMENT timing only (game.js: applyCalibration / judgeNow) — never to
+   audio or visual scheduling — and is stored via SAVE as `calibrationMs`.
+
+   Like song-select, this is a menu utility, not gameplay: its taps are
+   captured here (the calib overlay sits above the touch lane zones) and do
+   not flow through INPUT.emit. All tick scheduling derives from
+   audio.ctx.currentTime (master-clock rule); the 25ms setInterval is only
+   the scheduler driver, exactly as the game's lookahead scheduler. */
+
+const CALIB_BPM = 120;
+const CALIB_PERIOD = 60 / CALIB_BPM;   // seconds between ticks (0.5s)
+const CALIB_TAPS = 16;                 // samples for the median (~16, per spec)
+const CALIB_CLAMP = 200;               // manual nudge bound, +/- ms
+
+let calibTimer = null;
+let calibNextTick = 0;                 // audio-clock time of the next tick to schedule
+let calibTickTimes = [];               // recently scheduled tick times (audio clock)
+let calibSamples = [];                 // rolling signed tap offsets, seconds (+ = late)
+let calibWorkingMs = 0;                // the value being edited / about to be saved
+let calibMeasuredMs = null;            // last completed 16-tap median, or null
+
+/* pure: signed median of a sample list (Node-tested in test/calibrate.test.js) */
+function calibMedian(arr){
+  const a = arr.slice().sort((x, y) => x - y);
+  const n = a.length;
+  if (!n) return 0;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+function calibClamp(ms){ return Math.max(-CALIB_CLAMP, Math.min(CALIB_CLAMP, Math.round(ms))); }
+function calibFmt(ms){ return (ms > 0 ? '+' : '') + ms + ' ms'; }
+
+/* lookahead tick scheduler — same 25ms/120ms pattern as the game */
+function calibScheduler(){
+  if (appState !== 'calibrate' || !audio.ctx) return;
+  const ahead = audio.ctx.currentTime + 0.12;
+  while (calibNextTick < ahead){
+    playVoice('tickHi', calibNextTick, 81, 0.08, audio.master);
+    calibTickTimes.push(calibNextTick);
+    if (calibTickTimes.length > 64) calibTickTimes.shift();
+    calibNextTick += CALIB_PERIOD;
+  }
+}
+
+/* one tap: its signed distance to the nearest scheduled tick (audio clock) */
+function calibTap(){
+  if (appState !== 'calibrate' || !audio.ctx) return;
+  const now = audio.ctx.currentTime;
+  let nearest = Infinity;              // signed now-tick, picks the closest tick
+  for (const tt of calibTickTimes){
+    if (Math.abs(now - tt) < Math.abs(nearest)) nearest = now - tt;
+  }
+  if (nearest === Infinity) return;    // no tick scheduled yet
+  calibSamples.push(nearest);
+  if (calibSamples.length > CALIB_TAPS) calibSamples.shift();
+  if (calibSamples.length >= CALIB_TAPS){
+    calibMeasuredMs = calibClamp(calibMedian(calibSamples) * 1000);
+    calibWorkingMs = calibMeasuredMs;
+  }
+  const z = document.getElementById('calibtap');
+  z.classList.remove('flash'); void z.offsetWidth; z.classList.add('flash');
+  renderCalib();
+}
+
+function calibNudge(deltaMs){
+  if (appState !== 'calibrate') return;
+  calibWorkingMs = calibClamp(calibWorkingMs + deltaMs);
+  renderCalib();
+}
+
+function calibRestart(){
+  calibSamples = [];
+  calibMeasuredMs = null;
+  if (audio.ctx){ calibTickTimes = []; calibNextTick = audio.ctx.currentTime + 0.4; }
+  renderCalib();
+}
+
+function renderCalib(){
+  document.getElementById('calib-count').textContent =
+    Math.min(calibSamples.length, CALIB_TAPS) + ' / ' + CALIB_TAPS;
+  const meas = document.getElementById('calib-measured');
+  if (calibMeasuredMs === null){
+    meas.textContent = calibSamples.length ? 'KEEP TAPPING…' : 'TAP ON EACH TICK';
+  } else {
+    meas.textContent = 'MEASURED ' + calibFmt(calibMeasuredMs);
+  }
+  document.getElementById('calib-value').textContent = calibFmt(calibWorkingMs);
+}
+
+function enterCalibrate(){
+  appState = 'calibrate';
+  if (!audio.ctx) initAudio();         // reached via a tap/click — audio gesture
+  warmUpAudio();
+  audio.ctx.resume();
+  document.getElementById('calibprompt').classList.add('hidden');
+  ui.select.classList.add('hidden');
+  ui.settings.classList.add('hidden');
+  calibSamples = [];
+  calibMeasuredMs = null;
+  calibWorkingMs = calibClamp(SAVE.getSetting('calibrationMs', 0));
+  calibTickTimes = [];
+  calibNextTick = audio.ctx.currentTime + 0.4;
+  if (!calibTimer) calibTimer = setInterval(calibScheduler, 25);
+  renderCalib();
+  document.getElementById('calib').classList.remove('hidden');
+}
+
+function exitCalibrate(save){
+  if (calibTimer){ clearInterval(calibTimer); calibTimer = null; }
+  if (save){
+    SAVE.setSetting('calibrationMs', calibWorkingMs);
+    applySettings();                   // CALIB_OFFSET updates live (no restart)
+  }
+  document.getElementById('calib').classList.add('hidden');
+  enterSettings();                     // back to OPTIONS
+}
+
+/* first-run suggestion: touch devices that haven't calibrated yet get a
+   one-time prompt the first time they reach song select (spec §4) */
+function maybeSuggestCalibration(){
+  if (!document.body.classList.contains('touch')) return;
+  if (SAVE.getSetting('calibPrompted', false)) return;
+  if (calibClamp(SAVE.getSetting('calibrationMs', 0)) !== 0) return;
+  SAVE.setSetting('calibPrompted', true);
+  document.getElementById('calibprompt').classList.remove('hidden');
+}
+
+/* DOM wiring deferred to boot (called from main.js) so the module loads
+   cleanly outside the browser for the Node test */
+function initCalibrate(){
+  const z = document.getElementById('calibtap');
+  z.addEventListener('touchstart', e => { e.preventDefault(); calibTap(); }, { passive:false });
+  z.addEventListener('mousedown', () => calibTap());
+  document.getElementById('calib-minus').addEventListener('click', () => calibNudge(-5));
+  document.getElementById('calib-plus').addEventListener('click', () => calibNudge(5));
+  document.getElementById('calib-restart').addEventListener('click', calibRestart);
+  document.getElementById('calib-save').addEventListener('click', () => exitCalibrate(true));
+  document.getElementById('calib-cancel').addEventListener('click', () => exitCalibrate(false));
+  document.getElementById('cp-yes').addEventListener('click', enterCalibrate);
+  document.getElementById('cp-skip').addEventListener('click',
+    () => document.getElementById('calibprompt').classList.add('hidden'));
+}
 /* ---------------- main loop (visuals only) ---------------- */
 function frame(){
   requestAnimationFrame(frame);
@@ -2142,6 +2369,7 @@ buildRingHud();
 // a later first touch can still flip a missed detection (see input.js)
 setInputMode(window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'key');
 buildTitle();
+initCalibrate();              // wire the §4 calibration screen controls
 selectSong(SONGS[songSel]);   // prepares the song, builds walls, sets timing
 function updateRingIdle(){
   for (let w = 0; w < WALL_COUNT; w++){

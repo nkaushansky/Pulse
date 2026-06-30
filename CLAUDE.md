@@ -36,14 +36,18 @@ the next starts — keep that gate):
   it stays off `'good'`/`'perfect'` (those already sound the note via
   `playHitNote`). Plus an iOS AudioContext warm-up (`warmUpAudio()`, a
   silent single-frame buffer fired on the start gesture). See "Audio
-  routing" below. **On the work branch awaiting the owner's phone
+  routing" below.
+- **§4 Latency calibration** — `CALIBRATE` screen reachable from OPTIONS
+  (`C`): a steady 120 BPM tick, tap-along, median signed offset over 16
+  taps, plus a manual ±5 ms nudge. The offset shifts **judgment timing
+  only** (`applyCalibration`/`judgeNow` in `src/game.js`), never audio or
+  visual scheduling; stored as the `calibrationMs` `SAVE` setting; a
+  one-time prompt is suggested on the first touch run. See "Latency
+  calibration" below. **On the work branch awaiting the owner's phone
   play-test before the next ff.**
 
 Remaining:
 
-- **§4 Latency calibration** — tap-along median offset (~16 taps) +
-  manual nudge; applies to judgment only (never audio/visual
-  scheduling); stored as a `SAVE` setting; suggest on first touch run.
 - **Release** — tag, deploy `dist/pulse.html` to nk00.com.
 
 Deferred candidates (owner-acknowledged, not scheduled):
@@ -64,17 +68,17 @@ Deferred candidates (owner-acknowledged, not scheduled):
 Process notes:
 
 - Work lands on the session work branch; `main` is fast-forwarded only
-  after the owner's play-test passes. §3 + the run-timer passed and
-  `main` is at that line (`7e7873d`); the early-tap audio feedback fix
-  is on the work branch awaiting the owner's phone play-test before the
-  next ff (then §4 calibration, then release).
+  after the owner's play-test passes. §3, the run-timer, and the early-tap
+  audio feedback fix passed and `main` is at that line (`58de742`); §4
+  latency calibration is on the work branch awaiting the owner's phone
+  play-test before the next ff (then release).
 - This remote rejects tag pushes (branches only). Tags must be pushed
   from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
   567e3ca; git push origin v1 v2-foundation`.
 - Logic that can run outside the browser gets a Node test (stubbed
   `window`/`localStorage`) before pushing; song packages are validated
   against the contract the same way. Current suite:
-  `node test/touch.test.js && node test/charts.test.js && node test/results.test.js`.
+  `node test/touch.test.js && node test/charts.test.js && node test/results.test.js && node test/calibrate.test.js`.
 
 ## Build
 
@@ -175,9 +179,11 @@ etc. land here in later sections). Nothing else goes in the blob.
 browsing) or a corrupt/missing blob degrades to session-only state and
 must never break boot. No other module touches localStorage.
 
-Settings keys in use (V2 §6): `speedMult` (0.75|1|1.25), `windowMode`
-(`strict|normal|relaxed`), `lenient` (bool). Defaults reproduce V1 feel
-exactly. Runs with any non-default setting are tagged on the results
+Settings keys in use: `speedMult` (0.75|1|1.25), `windowMode`
+(`strict|normal|relaxed`), `lenient` (bool) — all V2 §6; `calibrationMs`
+(signed int, V2 §4 latency offset); `calibPrompted` (bool, one-time
+first-touch calibration suggestion). Defaults reproduce V1 feel exactly
+(`calibrationMs` 0 = no offset). Runs with any non-default setting are tagged on the results
 screen and are NEVER recorded to the saved bests — default-settings
 records must not be displaced by assisted (or hardened) runs. The
 `OPTIONS` table in `src/hud.js` is the single source of option
@@ -227,6 +233,38 @@ full: every touch event detail stays inside `src/input.js`. The layer:
   Add-to-Home-Screen.
 - Chart authoring bound for thumbs (enforced by `test/charts.test.js`):
   ≤2 simultaneous lanes, ≥240 ms same-lane, ≥200 ms between any hits.
+
+## Latency calibration (V2 §4)
+
+A `CALIBRATE` screen (`src/calibrate.js`, `#calib` in the template) reached
+from OPTIONS (`C` key or the button). A steady tick at `CALIB_BPM` (120)
+is scheduled on the master clock by a lookahead scheduler (same 25 ms /
+120 ms pattern as the game — the `setInterval` is only the driver). Each
+tap reads `audio.ctx.currentTime` and records its **signed** distance to
+the nearest scheduled tick; after `CALIB_TAPS` (16) the rolling median
+becomes the value, with a manual ±5 ms nudge (`calibClamp`, bound ±200).
+`SAVE` (`calibrationMs`).
+
+The offset shifts **judgment timing only** — never audio or visual
+scheduling, never the phrase index. `applySettings()` derives
+`CALIB_OFFSET` (seconds) from `calibrationMs`; `applyCalibration(t) =
+t - CALIB_OFFSET` and `judgeNow() = applyCalibration(nowSong())`
+(`src/game.js`). It is applied in exactly three judgment spots:
+`onLaneInput` (the gem-match `dt` and the signed `off`), `missCheck`
+(the auto-miss boundary, so it tracks the shifted hit window), and
+`setupAttempt`'s slipped-past check. Everything else — gem positions,
+`scheduleStep`, `playHitNote`, count-in, the phrase index `p` and the
+attempt/break bookkeeping — stays on the raw `nowSong()` clock. So
+`CALIB_OFFSET = 0` is byte-identical to V1 feel, and a +80 ms offset moves
+the on-time moment exactly +80 ms later (the spec acceptance, covered by
+`test/calibrate.test.js` along with the storage round-trip). Edge note:
+under a large *positive* offset a gem within ~`offset` of a phrase
+boundary can slip past the auto-miss (the visual phrase advances first) —
+benign leniency, never a false break; real offsets are tens of ms.
+
+First-run suggestion: `maybeSuggestCalibration()` (called from
+`enterSelect`) shows a one-time `#calibprompt` on touch devices that
+haven't calibrated, gated by the `calibPrompted` flag.
 
 ## Audio routing (V2 §1 — per-hit note audio)
 

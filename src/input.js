@@ -32,7 +32,16 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'ArrowDown') moveOptSel(1);
     else if (e.code === 'ArrowLeft') changeOpt(-1);
     else if (e.code === 'ArrowRight') changeOpt(1);
+    else if (e.code === 'KeyC') enterCalibrate();
     else if (e.code === 'Escape' || e.code === 'KeyO' || e.code === 'Enter') enterSelect();
+    return;
+  }
+  if (appState === 'calibrate'){
+    if (e.code === 'Space') calibTap();             // tap along the tick
+    else if (e.code === 'ArrowLeft') calibNudge(-5);
+    else if (e.code === 'ArrowRight') calibNudge(5);
+    else if (e.code === 'Enter' || e.code === 'NumpadEnter') exitCalibrate(true);
+    else if (e.code === 'Escape') exitCalibrate(false);
     return;
   }
   if (appState === 'over' || (G && G.state === 'over')){
@@ -57,6 +66,9 @@ document.getElementById('btn-select').addEventListener('click', () => {
 document.getElementById('btn-options').addEventListener('click', () => {
   if (appState === 'select') enterSettings();
 });
+document.getElementById('btn-calibrate').addEventListener('click', () => {
+  if (appState === 'settings') enterCalibrate();
+});
 document.getElementById('btn-back').addEventListener('click', () => {
   if (appState === 'select') backToTitle();
 });
@@ -74,6 +86,7 @@ function enterSelect(){
   ui.settings.classList.add('hidden');
   buildSelect();
   ui.select.classList.remove('hidden');
+  maybeSuggestCalibration();       // §4: one-time prompt on first touch run
 }
 
 function enterSettings(){

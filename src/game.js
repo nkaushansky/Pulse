@@ -2,6 +2,12 @@
 let G = null;
 
 function nowSong(){ return audio.ctx.currentTime - G.songStart; }
+/* §4: the judgment clock is the master clock shifted by the saved latency
+   offset. Used ONLY for hit/miss timing — never visuals, audio scheduling,
+   or the phrase index — so a tap that lands `offset` from a gem (the
+   player's systematic input latency) is judged as on-time. */
+function applyCalibration(songTime){ return songTime - CALIB_OFFSET; }
+function judgeNow(){ return applyCalibration(nowSong()); }
 function phraseStartTime(p){ return G.songStart + p * PHRASE_SEC; }
 
 function newGame(){
@@ -50,7 +56,7 @@ function setupAttempt(p, fresh){
   let valid = !captured && gems.length > 0;
   if (valid && !fresh){
     // rotated in mid-phrase: only valid if nothing already slipped past
-    const t = nowSong();
+    const t = judgeNow();            // §4: judge slipped-past on the calibrated clock
     valid = gems.every(g => g.hit || g.time >= t - HIT_WINDOW);
   }
   const hits = gems.reduce((n, g) => n + (g.hit ? 1 : 0), 0);
@@ -126,7 +132,8 @@ function captureTrack(tr, p){
 function onLaneInput(lane){
   if (!G || G.state !== 'playing') return;
   const tr = SONG.tracks[G.activeIdx];
-  const t = nowSong();
+  const t = nowSong();               // visual/phrase clock (drives p + attempt logic)
+  const tj = judgeNow();             // §4: gem timing judged on the calibrated clock
   const p = Math.max(0, Math.floor(t / PHRASE_SEC));
   // candidates in this phrase and the next (early hits across the boundary)
   let best = null, bestDt = Infinity;
@@ -135,7 +142,7 @@ function onLaneInput(lane){
     if (!gems || (ph !== p && isCaptured(tr, ph))) continue;
     for (const gem of gems){
       if (gem.lane !== lane || gem.hit || gem.missed) continue;
-      const dt = Math.abs(gem.time - t);
+      const dt = Math.abs(gem.time - tj);
       if (dt <= HIT_WINDOW && dt < bestDt){ best = gem; bestDt = dt; }
     }
   }
@@ -146,7 +153,7 @@ function onLaneInput(lane){
       return;
     }
     best.hit = true;
-    const off = t - best.time;       // signed: negative = early, positive = late
+    const off = tj - best.time;      // signed: negative = early, positive = late
     const perfect = bestDt <= PERFECT_WINDOW;
     G.score += (perfect ? 200 : 100) * G.mult;
     G.hits++;
@@ -174,9 +181,10 @@ function missCheck(t, p){
   const tr = SONG.tracks[G.activeIdx];
   const gems = tr._byPhrase[p];
   if (!gems) return;
-  for (const gem of gems){
+  const tj = applyCalibration(t);    // §4: miss boundary on the calibrated clock,
+  for (const gem of gems){           //     so it matches the (shifted) hit window
     if (gem.hit || gem.missed || isCaptured(tr, p)) continue;
-    if (gem.time < t - HIT_WINDOW){
+    if (gem.time < tj - HIT_WINDOW){
       gem.missed = true;
       G.misses++;
       if (gem.mesh) gem.mesh.material = gemMats.miss;
