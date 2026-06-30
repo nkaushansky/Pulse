@@ -43,12 +43,29 @@ the next starts — keep that gate):
   only** (`applyCalibration`/`judgeNow` in `src/game.js`), never audio or
   visual scheduling; stored as the `calibrationMs` `SAVE` setting; a
   one-time prompt is suggested on the first touch run. See "Latency
-  calibration" below. **On the work branch awaiting the owner's phone
-  play-test before the next ff.**
+  calibration" below. **Play-tested & approved; on `main`.**
+
+**V2 is feature-complete** — every spec section (§0–§6) plus the
+post-spec run timer and early-tap audio feedback is on `main` and
+play-tested. The only roadmap item left is Release, which is on hold (see
+below).
 
 Remaining:
 
-- **Release** — tag, deploy `dist/pulse.html` to nk00.com.
+- **Release** — tag the V2-complete commit + deploy `dist/pulse.html` to
+  nk00.com. **On hold** — owner is holding deploy while scoping V3, so the
+  release is paused (not blocked). The tag is just a marker and can wait;
+  when ready it must be pushed from the owner's machine (this remote
+  rejects tag pushes — see process notes).
+
+Next up (V3 — owner scoping):
+
+- Owner has V3 thoughts that fold in the deferred candidates below
+  (landscape reframe, accelerometer row-switching, haptics) and the V2
+  non-goals (real-audio stems / `stemUrl`, Track Studio, gamepad, visual
+  themes / capture-driven tunnel growth, instanced-gem perf pass, online
+  leaderboards). Await the owner's V3 spec before starting; V3 work begins
+  fresh from `main`.
 
 Deferred candidates (owner-acknowledged, not scheduled):
 
@@ -68,10 +85,9 @@ Deferred candidates (owner-acknowledged, not scheduled):
 Process notes:
 
 - Work lands on the session work branch; `main` is fast-forwarded only
-  after the owner's play-test passes. §3, the run-timer, and the early-tap
-  audio feedback fix passed and `main` is at that line (`58de742`); §4
-  latency calibration is on the work branch awaiting the owner's phone
-  play-test before the next ff (then release).
+  after the owner's play-test passes. §4 latency calibration (`7c60f61`)
+  passed, so `main` is fast-forwarded to the V2-complete line. Release is
+  paused for V3 scoping (deploy is the only remaining step).
 - This remote rejects tag pushes (branches only). Tags must be pushed
   from the owner's machine: `git tag v1 22f2345; git tag v2-foundation
   567e3ca; git push origin v1 v2-foundation`.
